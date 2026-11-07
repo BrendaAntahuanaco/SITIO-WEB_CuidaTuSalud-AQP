@@ -2,6 +2,7 @@ package com.campanas.salud.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /** Campaña de salud publicada por un administrador. */
 @Entity
@@ -15,8 +16,19 @@ public class Campana {
     private LocalDate fechaFin;
     private String fuente;
 
+    @Column(length = 20)
+    private String estado;                 // ACTIVA, PROGRAMADA o CERRADA
+
+    private LocalDateTime fechaActualizacion;
+
     @ManyToOne
     private Establecimiento establecimiento;
+
+    @PrePersist
+    @PreUpdate
+    void actualizarFecha() {
+        this.fechaActualizacion = LocalDateTime.now();
+    }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -32,6 +44,7 @@ public class Campana {
     public void setFechaFin(LocalDate fechaFin) { this.fechaFin = fechaFin; }
     public String getFuente() { return fuente; }
     public void setFuente(String fuente) { this.fuente = fuente; }
-    public Establecimiento getEstablecimiento() { return establecimiento; }
-    public void setEstablecimiento(Establecimiento e) { this.establecimiento = e; }
-}
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+    public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
+    public Establecimiento getEstablecimiento()
