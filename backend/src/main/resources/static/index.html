@@ -7,77 +7,15 @@
     <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
-    <div id="agrupar">
+    <!-- React se dibuja dentro de este div -->
+    <div id="root"></div>
 
-        <header id="cabecera">
-            <h1>Cuida Tu Salud AQP</h1>
-            <h2>Campañas de vacunación en Arequipa</h2>
-        </header>
+    <!-- Librerías externas (licencia MIT): React 18, ReactDOM 18 y Babel (traduce JSX en el navegador) -->
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        <nav id="menu">
-            <ul>
-                <li><a href="#" onclick="mostrarCampanas(); return false;">Campañas</a></li>
-                <li id="menuReservas" class="oculto"><a href="#" onclick="mostrarReservas(); return false;">Mis reservas</a></li>
-                <li id="menuSalir" class="oculto"><a href="#" onclick="salir(); return false;">Salir</a></li>
-            </ul>
-        </nav>
-
-        <section id="seccion">
-            <div id="mensajes"></div>
-
-            <div id="filtros">
-                <label for="fVacuna">Vacuna</label>
-                <input type="text" id="fVacuna" placeholder="Ej. Sarampión">
-                <label for="fDistrito">Distrito</label>
-                <input type="text" id="fDistrito" placeholder="Ej. Miraflores">
-                <button type="button" onclick="mostrarCampanas()">Buscar</button>
-            </div>
-
-            <div id="contenido"></div>
-        </section>
-
-        <aside id="columna">
-            <div id="cajaLogin">
-                <h2>Ingresar</h2>
-                <form id="formLogin">
-                    <label for="lCorreo">Correo</label>
-                    <input type="email" id="lCorreo" required>
-                    <label for="lClave">Contraseña</label>
-                    <input type="password" id="lClave" required>
-                    <button type="submit">Ingresar</button>
-                </form>
-                <p class="cambio">¿No tienes cuenta? <a href="#" onclick="verRegistro(true); return false;">Crear cuenta</a></p>
-            </div>
-
-            <div id="cajaRegistro" class="oculto">
-                <h2>Crear cuenta</h2>
-                <form id="formRegistro">
-                    <label for="rNombres">Nombres</label>
-                    <input type="text" id="rNombres" required>
-                    <label for="rApellidos">Apellidos</label>
-                    <input type="text" id="rApellidos" required>
-                    <label for="rDni">DNI (8 dígitos)</label>
-                    <input type="text" id="rDni" maxlength="8" required>
-                    <label for="rCorreo">Correo</label>
-                    <input type="email" id="rCorreo" required>
-                    <label for="rClave">Contraseña (mínimo 6)</label>
-                    <input type="password" id="rClave" required>
-                    <button type="submit">Registrarme</button>
-                </form>
-                <p class="cambio">¿Ya tienes cuenta? <a href="#" onclick="verRegistro(false); return false;">Ingresar</a></p>
-            </div>
-
-            <div id="cajaUsuario" class="oculto">
-                <h2 id="saludo"></h2>
-                <p>Ya puedes reservar turnos en cualquier campaña.</p>
-            </div>
-        </aside>
-
-        <footer id="pie">
-            Proyecto de Programación Web · Arequipa 2026
-        </footer>
-
-    </div>
-    <script src="app.js"></script>
+    <!-- Nuestro código React -->
+    <script type="text/babel" data-presets="react" src="app.jsx"></script>
 </body>
 </html>
