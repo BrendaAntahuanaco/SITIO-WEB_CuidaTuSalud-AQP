@@ -1,1 +1,115 @@
+/* Regla general (Listado 2-26) y box-sizing (Listado 2-36) */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Elementos estructurales de HTML5 como block (Listado 2-28) */
+header, section, footer, aside, nav, article { display: block; }
+
+/* Centrando el cuerpo (Listado 2-29). Letra grande para adultos mayores. */
+body { text-align: center; font-family: Verdana, sans-serif; font-size: 18px; color: #1c2b25; background: #eef3f0; }
+
+/* Cabeceras (Listado 2-27) */
+h1 { font: bold 30px Verdana, sans-serif; }
+h2 { font: bold 20px Verdana, sans-serif; margin-bottom: 10px; }
+h3 { font: bold 20px Verdana, sans-serif; margin-bottom: 8px; color: #084c37; }
+p { margin-bottom: 8px; }
+
+/* Caja principal (Listado 2-30) */
+#agrupar { max-width: 960px; margin: 15px auto; padding: 0 10px; text-align: left; }
+
+/* Cabecera con gradiente, esquinas redondeadas y sombra (Listados 3-3, 3-6, 3-11) */
+#cabecera {
+    text-align: center;
+    padding: 20px;
+    border: 1px solid #999999;
+    border-radius: 20px;
+    background: linear-gradient(to bottom, #ffffff, #8fd0b3);
+    box-shadow: rgba(0, 0, 0, 0.3) 5px 5px 10px;
+}
+#cabecera h1 { color: #084c37; text-shadow: rgba(0, 0, 0, 0.3) 3px 3px 5px; }
+
+/* Barra de navegación (Listado 2-32) */
+#menu { background: #0b6e4f; padding: 5px 15px; margin: 15px 0; border-radius: 10px; }
+#menu li { display: inline-block; list-style: none; padding: 5px; }
+#menu a {
+    display: inline-block;
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 10px 14px;
+    border-radius: 8px;
+    transition: background 0.3s ease-in-out;
+}
+#menu a:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* Dos columnas con float (Listado 2-33) */
+#seccion { float: left; width: 68%; }
+#columna {
+    float: left;
+    width: 30%;
+    margin-left: 2%;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #999999;
+    border-radius: 12px;
+    box-shadow: rgba(0, 0, 0, 0.2) 2px 2px 6px;
+}
+
+/* Pie: recupera el flujo normal con clear (Listado 2-34) */
+#pie { clear: both; text-align: center; padding: 20px; margin-top: 15px; border-top: 2px solid #999999; }
+
+/* Tarjetas de campañas (Listado 2-35) con efecto al pasar el mouse (Listados 3-25 y 3-26) */
+article {
+    background: #ffffff;
+    border: 1px solid #999999;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: rgba(0, 0, 0, 0.2) 2px 2px 6px;
+    transition: transform 0.3s ease-in-out;
+}
+article:hover { transform: translateY(-3px); }
+article footer { text-align: right; margin-top: 10px; }
+
+/* Filtros */
+#filtros {
+    background: #ffffff;
+    border: 1px solid #999999;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+/* Formularios: campos y botones grandes */
+label { display: block; font-weight: bold; margin: 10px 0 4px; }
+input { width: 100%; font-size: 1rem; padding: 10px; border: 2px solid #9db3a9; border-radius: 8px; margin-bottom: 6px; }
+button {
+    font-size: 1rem;
+    padding: 12px 18px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 8px;
+    background: #0b6e4f;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.3s ease-in-out;
+}
+button:hover { background: #084c37; }
+button:disabled { background: #9aa8a1; cursor: not-allowed; }
+button.cancelar { background: #b3261e; }
+.cambio { margin-top: 12px; }
+a { color: #0b6e4f; }
+
+/* Turnos de cada campaña */
+.turno { padding: 10px 0; border-top: 1px solid #cfd9d3; }
+.fuente { color: #5b6b63; font-size: 0.9rem; }
+
+/* Mensajes */
+.error { background: rgba(179, 38, 30, 0.12); color: #8a1c1c; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+.ok { background: rgba(11, 110, 79, 0.12); color: #084c37; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+.oculto { display: none !important; }
+
+/* En celulares las columnas se apilan (el informe promete diseño responsive) */
+@media (max-width: 700px) {
+    #seccion, #columna { float: none; width: 100%; margin-left: 0; }
+    #columna { margin-top: 15px; }
+}
