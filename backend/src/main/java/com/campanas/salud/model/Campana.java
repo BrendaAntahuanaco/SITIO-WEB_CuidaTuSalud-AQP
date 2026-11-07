@@ -58,3 +58,4 @@ public class Campana {
     public void setEstado(String estado) { this.estado = estado; }
 
     public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
+}
