@@ -10,10 +10,11 @@ public class Reserva {
     private Long id;
     private Long usuarioId;
     @ManyToOne private Turno turno;
-    private String beneficiarioNombre;
-    private String beneficiarioDni;
-    private String estado = "RESERVADA"; // RESERVADA, CANCELADA o ATENDIDA
+    @Column(length = 150) private String beneficiarioNombre;
+    @Column(length = 8) private String beneficiarioDni;
+    @Column(length = 20) private String estado = "RESERVADA"; // RESERVADA, CANCELADA o ATENDIDA
     private LocalDateTime fechaReserva = LocalDateTime.now();
+    private LocalDateTime fechaAtencion;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -29,4 +30,6 @@ public class Reserva {
     public void setEstado(String estado) { this.estado = estado; }
     public LocalDateTime getFechaReserva() { return fechaReserva; }
     public void setFechaReserva(LocalDateTime f) { this.fechaReserva = f; }
+    public LocalDateTime getFechaAtencion() { return fechaAtencion; }
+    public void setFechaAtencion(LocalDateTime f) { this.fechaAtencion = f; }
 }

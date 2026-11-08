@@ -2,21 +2,30 @@ package com.campanas.salud.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /** Campaña de salud publicada por un administrador. */
 @Entity
 public class Campana {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String vacuna;
-    private String descripcion;
-    private String requisitos;
+    @Column(length = 100) private String vacuna;
+    @Column(length = 1000) private String descripcion;
+    @Column(length = 1000) private String requisitos;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
-    private String fuente;
+    @Column(length = 200) private String fuente;
+    @Column(length = 20) private String estado;          // ACTIVA, PROGRAMADA o CERRADA
+    private LocalDateTime fechaActualizacion;
 
     @ManyToOne
     private Establecimiento establecimiento;
+
+    /** Se actualiza sola cada vez que la campaña se crea o se edita. */
+    @PrePersist
+    @PreUpdate
+    void actualizarFecha() { this.fechaActualizacion = LocalDateTime.now(); }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -32,6 +41,17 @@ public class Campana {
     public void setFechaFin(LocalDate fechaFin) { this.fechaFin = fechaFin; }
     public String getFuente() { return fuente; }
     public void setFuente(String fuente) { this.fuente = fuente; }
+
+    /** Si la campaña no tiene estado guardado, se calcula con sus fechas (filas antiguas). */
+    public String getEstado() {
+        if (estado != null && !estado.isBlank()) return estado;
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Lima"));
+        if (fechaFin != null && fechaFin.isBefore(hoy)) return "CERRADA";
+        if (fechaInicio != null && fechaInicio.isAfter(hoy)) return "PROGRAMADA";
+        return "ACTIVA";
+    }
+    public void setEstado(String estado) { this.estado = estado; }
+    public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
     public Establecimiento getEstablecimiento() { return establecimiento; }
     public void setEstablecimiento(Establecimiento e) { this.establecimiento = e; }
 }

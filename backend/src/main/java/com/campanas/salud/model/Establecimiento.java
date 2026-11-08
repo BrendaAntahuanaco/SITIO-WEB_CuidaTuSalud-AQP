@@ -7,9 +7,9 @@ import jakarta.persistence.*;
 public class Establecimiento {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String nombre;
-    private String distrito;
-    private String direccion;
+    @Column(length = 150) private String nombre;
+    @Column(length = 100) private String distrito;
+    @Column(length = 200) private String direccion;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

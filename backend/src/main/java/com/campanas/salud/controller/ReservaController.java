@@ -2,95 +2,114 @@ package com.campanas.salud.controller;
 
 import com.campanas.salud.model.Reserva;
 import com.campanas.salud.model.Turno;
-import com.campanas.salud.repository.CampanaRepository;
+import com.campanas.salud.model.Usuario;
 import com.campanas.salud.repository.ReservaRepository;
 import com.campanas.salud.repository.TurnoRepository;
+import com.campanas.salud.seguridad.AutenticacionInterceptor;
+import com.campanas.salud.util.BitacoraService;
+import com.campanas.salud.util.Texto;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDateTime;
 import java.util.List;
 
-/** Turnos y reservas con control de cupos (RF-12, RF-13, RF-14, RF-18). */
+/** Reservas con control de cupos y control de asistencia (RF-12, RF-13, RF-14, RF-15). */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/reservas")
 public class ReservaController {
 
-    public record ReservaRequest(Long usuarioId, Long turnoId,
-                                 String beneficiarioNombre, String beneficiarioDni) { }
+    /** El usuario NO viaja aquí: sale del token, para que nadie reserve a nombre de otra cuenta. */
+    public record ReservaRequest(Long turnoId, String beneficiarioNombre, String beneficiarioDni) { }
 
     private final TurnoRepository turnos;
     private final ReservaRepository reservas;
-    private final CampanaRepository campanas;
+    private final BitacoraService bitacora;
 
-    public ReservaController(TurnoRepository turnos, ReservaRepository reservas, CampanaRepository campanas) {
+    public ReservaController(TurnoRepository turnos, ReservaRepository reservas, BitacoraService bitacora) {
         this.turnos = turnos;
         this.reservas = reservas;
-        this.campanas = campanas;
+        this.bitacora = bitacora;
     }
 
-    /** Turnos de una campaña: GET /api/turnos?campanaId=1 */
-    @GetMapping("/turnos")
-    public List<Turno> turnos(@RequestParam Long campanaId) {
-        return turnos.findByCampanaId(campanaId);
-    }
-
-    /** Crea un turno con su aforo (RF-18): POST /api/turnos?campanaId=1 */
-    @PostMapping("/turnos")
-    @ResponseStatus(HttpStatus.CREATED)
-    public Turno crearTurno(@RequestParam Long campanaId, @RequestBody Turno t) {
-        if (t.getCuposTotal() <= 0)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Los cupos deben ser mayores a 0");
-        t.setId(null);
-        t.setCampana(campanas.findById(campanaId).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Campaña no encontrada")));
-        t.setCuposDisponibles(t.getCuposTotal());
-        return turnos.save(t);
+    private ResponseStatusException error(HttpStatus estado, String mensaje) {
+        return new ResponseStatusException(estado, mensaje);
     }
 
     /** Reserva un turno y descuenta un cupo. Si no quedan, responde 409 (RF-13). */
     @Transactional
-    @PostMapping("/reservas")
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Reserva reservar(@RequestBody ReservaRequest r) {
-        Turno t = turnos.findById(r.turnoId()).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "El turno no existe"));
-        if (r.beneficiarioNombre() == null || r.beneficiarioNombre().isBlank())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe el nombre de quien se vacunará");
-        if (r.beneficiarioDni() == null || !r.beneficiarioDni().matches("\\d{8}"))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El DNI debe tener 8 dígitos");
-        if (t.getCuposDisponibles() <= 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "No quedan cupos en este turno");
+    public Reserva reservar(@RequestBody ReservaRequest r, HttpServletRequest req) {
+        Usuario usuario = AutenticacionInterceptor.actual(req);
+        if (r.turnoId() == null) throw error(HttpStatus.BAD_REQUEST, "Elige un horario");
+        Turno t = turnos.findById(r.turnoId()).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "El turno no existe"));
 
-        t.setCuposDisponibles(t.getCuposDisponibles() - 1);
-        turnos.save(t);
+        if (Texto.vacio(r.beneficiarioNombre()) || r.beneficiarioNombre().trim().length() > 150)
+            throw error(HttpStatus.BAD_REQUEST, "Escribe el nombre de quien se vacunará");
+        if (r.beneficiarioDni() == null || !r.beneficiarioDni().matches("\\d{8}"))
+            throw error(HttpStatus.BAD_REQUEST, "El DNI debe tener 8 dígitos");
+        if ("CERRADA".equals(t.getCampana().getEstado()))
+            throw error(HttpStatus.CONFLICT, "Esta campaña ya está cerrada");
+        if (t.getFecha().isBefore(Texto.hoy()))
+            throw error(HttpStatus.CONFLICT, "Ese turno ya pasó. Elige otro horario.");
+        if (reservas.existsByTurnoCampanaIdAndBeneficiarioDniAndEstado(t.getCampana().getId(), r.beneficiarioDni(), "RESERVADA"))
+            throw error(HttpStatus.CONFLICT, "Ya hay una reserva activa para ese DNI en esta campaña.");
+
+        // Descuento atómico: dos personas a la vez no pueden quedarse con el último cupo
+        if (turnos.descontarCupo(t.getId()) == 0)
+            throw error(HttpStatus.CONFLICT, "No quedan cupos en este turno");
 
         Reserva reserva = new Reserva();
-        reserva.setUsuarioId(r.usuarioId());
-        reserva.setTurno(t);
+        reserva.setUsuarioId(usuario.getId());
+        reserva.setTurno(turnos.findById(t.getId()).orElseThrow()); // turno ya con el cupo descontado
         reserva.setBeneficiarioNombre(r.beneficiarioNombre().trim());
         reserva.setBeneficiarioDni(r.beneficiarioDni());
         return reservas.save(reserva);
     }
 
-    /** Historial de reservas de un ciudadano: GET /api/reservas?usuarioId=1 */
-    @GetMapping("/reservas")
-    public List<Reserva> delUsuario(@RequestParam Long usuarioId) {
-        return reservas.findByUsuarioId(usuarioId);
+    /** Historial de reservas del ciudadano que inició sesión: GET /api/reservas */
+    @GetMapping
+    public List<Reserva> misReservas(HttpServletRequest req) {
+        return reservas.findByUsuarioIdOrderByFechaReservaDesc(AutenticacionInterceptor.actual(req).getId());
     }
 
-    /** Cancela una reserva y devuelve el cupo (RF-14). */
+    /** Cancela una reserva y devuelve el cupo (RF-14). Solo su dueño o un administrador. */
     @Transactional
-    @DeleteMapping("/reservas/{id}")
-    public Reserva cancelar(@PathVariable Long id) {
-        Reserva r = reservas.findById(id).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "La reserva no existe"));
+    @DeleteMapping("/{id}")
+    public Reserva cancelar(@PathVariable Long id, HttpServletRequest req) {
+        Usuario usuario = AutenticacionInterceptor.actual(req);
+        Reserva r = reservas.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "La reserva no existe"));
+        boolean esDueno = usuario.getId().equals(r.getUsuarioId());
+        if (!esDueno && !"ADMIN".equals(usuario.getRol()))
+            throw error(HttpStatus.NOT_FOUND, "La reserva no existe"); // no se revela que existe
         if (!"RESERVADA".equals(r.getEstado()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se cancelan reservas activas");
+            throw error(HttpStatus.BAD_REQUEST, "Solo se pueden cancelar reservas activas");
         r.setEstado("CANCELADA");
-        Turno t = r.getTurno();
-        t.setCuposDisponibles(t.getCuposDisponibles() + 1);
-        turnos.save(t);
+        turnos.devolverCupo(r.getTurno().getId());
         return reservas.save(r);
+    }
+
+    /** Administrador: busca las reservas de un paciente por DNI. */
+    @GetMapping("/buscar")
+    public List<Reserva> buscar(@RequestParam String dni) {
+        if (!dni.matches("\\d{8}")) throw error(HttpStatus.BAD_REQUEST, "El DNI debe tener 8 dígitos");
+        return reservas.findByBeneficiarioDniOrderByFechaReservaDesc(dni);
+    }
+
+    /** Administrador: marca que el paciente fue atendido (alimenta el historial y los reportes). */
+    @Transactional
+    @PutMapping("/{id}/atender")
+    public Reserva atender(@PathVariable Long id, HttpServletRequest req) {
+        Reserva r = reservas.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "La reserva no existe"));
+        if (!"RESERVADA".equals(r.getEstado()))
+            throw error(HttpStatus.BAD_REQUEST, "Solo se puede atender una reserva activa");
+        r.setEstado("ATENDIDA");
+        r.setFechaAtencion(LocalDateTime.now());
+        Reserva guardada = reservas.save(r);
+        bitacora.registrar(AutenticacionInterceptor.actual(req), "Registró asistencia", "Reserva AQP-" + String.format("%06d", id));
+        return guardada;
     }
 }
