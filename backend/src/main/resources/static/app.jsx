@@ -1,23 +1,11 @@
-// Aplicación React de Cuida Tu Salud AQP.
-// React y ReactDOM se cargan desde index.html (CDN), por eso aquí no hay "import" y no se usa Node.js.
-// React escapa automáticamente el texto que muestra, lo que protege contra XSS:
-// en todo el código NO se usa dangerouslySetInnerHTML.
 const { useState, useEffect, useRef, useContext, createContext, useCallback } = React;
-
-// El backend (Spring Boot) sirve esta página, así que basta una ruta relativa.
 const API = "/api";
-const Ctx = createContext(null); // comparte sesión, avisos y preferencias con todas las pantallas
-
-/* ====================================================================
-   Utilidades
-   ==================================================================== */
-
+const Ctx = createContext(null); 
 function leerSesion() {
   try { return JSON.parse(localStorage.getItem("sesion")); } catch { return null; }
 }
-let sesionActual = leerSesion(); // copia para que llamar() pueda enviar el token
+let sesionActual = leerSesion(); 
 
-/** Llama al backend con el token de sesión. Si hay error lanza el mensaje que envió el servidor. */
 async function llamar(ruta, opciones = {}) {
   const cabeceras = { "Content-Type": "application/json" };
   if (sesionActual?.token) cabeceras.Authorization = "Bearer " + sesionActual.token;
@@ -41,7 +29,7 @@ async function llamar(ruta, opciones = {}) {
   return datos;
 }
 
-const hoyLima = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }); // AAAA-MM-DD
+const hoyLima = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }); 
 
 function fecha(s) {
   if (!s) return "—";
@@ -70,7 +58,6 @@ function Insignia({ tabla, estado }) {
   return <span className={"insignia " + clase}>{texto}</span>;
 }
 
-/** Carga datos de la API al abrir la pantalla y permite volver a cargarlos. */
 function useCarga(ruta, inicial = null) {
   const { avisar } = useContext(Ctx);
   const [datos, setDatos] = useState(inicial);
@@ -84,7 +71,6 @@ function useCarga(ruta, inicial = null) {
   return [datos, cargar, cargando];
 }
 
-/** Ruta actual a partir del hash: #/campanas/3  ->  ["campanas", "3"] */
 function useRuta() {
   const leer = () => (window.location.hash.replace(/^#\/?/, "") || "inicio").split("/");
   const [ruta, setRuta] = useState(leer);
@@ -96,8 +82,6 @@ function useRuta() {
   return ruta;
 }
 const ir = (destino) => { window.location.hash = "#/" + destino; };
-
-/** Campo de formulario con su etiqueta (accesible: label + id) y su mensaje de error (aria-invalid / aria-describedby). */
 function Campo({ id, etiqueta, ayuda, area, error, contador, ...resto }) {
   const descripcion = [error && id + "-err", ayuda && id + "-ayuda"].filter(Boolean).join(" ") || undefined;
   const propiedades = { id, "aria-invalid": error ? "true" : undefined, "aria-describedby": descripcion, className: error ? "con-error" : undefined, ...resto };
@@ -111,20 +95,11 @@ function Campo({ id, etiqueta, ayuda, area, error, contador, ...resto }) {
     </>
   );
 }
-
-/** Mensaje de error de una casilla o grupo de opciones (checkbox / radiobutton). */
+/
 function ErrorCampo({ id, error }) {
   return error ? <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p> : null;
 }
 
-/**
- * Formulario con validación (Semana 3: eventos onFocus / onBlur / onSubmit y validación de formularios).
- *  - onChange: actualiza el valor y, si el campo ya se visitó, lo vuelve a validar en vivo.
- *  - onBlur: al salir del campo se valida ("el campo pierde el foco").
- *  - onFocus: el campo enfocado se resalta con CSS (:focus) y validarTodo() usa focus() para llevar a la persona al primer error.
- *  - validarTodo(): al enviar valida todo y pone el foco (focus()) en el primer campo con error.
- * "reglas" es { campo: (valor, todosLosValores) => "mensaje de error" o "" } y usa Validar (validaciones.js).
- */
 function useFormulario(inicial, reglas, prefijo = "f-") {
   const [valores, setValores] = useState(inicial);
   const [errores, setErrores] = useState({});
@@ -136,12 +111,12 @@ function useFormulario(inicial, reglas, prefijo = "f-") {
     const valor = limpiar && typeof bruto === "string" ? limpiar(bruto) : bruto;
     const nuevos = { ...valores, [campo]: valor };
     const esCasilla = e.target.type === "checkbox" || e.target.type === "radio";
-    const visitados = esCasilla ? { ...tocados, [campo]: true } : tocados; // casillas y radios se validan al marcarlos
+    const visitados = esCasilla ? { ...tocados, [campo]: true } : tocados; 
     setValores(nuevos);
     setTocados(visitados);
     setErrores((prev) => {
       const sig = { ...prev };
-      for (const k of Object.keys(reglas)) if (visitados[k]) sig[k] = calcular(k, nuevos); // revalida solo lo ya visitado
+      for (const k of Object.keys(reglas)) if (visitados[k]) sig[k] = calcular(k, nuevos); 
       return sig;
     });
   };
@@ -150,7 +125,6 @@ function useFormulario(inicial, reglas, prefijo = "f-") {
     setErrores((prev) => ({ ...prev, [campo]: calcular(campo, valores) }));
   };
 
-  /** Propiedades listas para un <Campo>: id, value, onChange, onBlur y error. */
   const campo = (nombre, limpiar) => ({
     id: prefijo + nombre, value: valores[nombre], error: errores[nombre],
     onChange: cambiar(nombre, limpiar), onBlur: alSalir(nombre),
@@ -175,7 +149,6 @@ function Cargando({ cargando, vacio, children }) {
   return children;
 }
 
-/** Pantallas que exigen sesión o rol de administrador (RF-05). */
 function Protegida({ rol, children }) {
   const { sesion } = useContext(Ctx);
   if (!sesion)
@@ -196,11 +169,6 @@ function Protegida({ rol, children }) {
     );
   return children;
 }
-
-/* ====================================================================
-   Inicio (mockup 1: RF-01, RF-02, RF-03)
-   ==================================================================== */
-
 function Inicio() {
   const { sesion, avisar } = useContext(Ctx);
   const [campanas, setCampanas] = useState(null);
@@ -280,11 +248,6 @@ function Inicio() {
     </>
   );
 }
-
-/* ====================================================================
-   Campañas, detalle y reserva (mockups 4 y 5: RF-09 a RF-13)
-   ==================================================================== */
-
 function Campanas({ ruta }) {
   const { avisar } = useContext(Ctx);
   const [filtros, setFiltros] = useState({ vacuna: "", distrito: "", fecha: "", estado: "" });
@@ -386,7 +349,6 @@ function Campanas({ ruta }) {
   );
 }
 
-/** Elegir turno, indicar quién se vacuna y confirmar (RF-12, RF-13). */
 function PanelReserva({ campana, alCambiar }) {
   const { sesion, avisar } = useContext(Ctx);
   const [turnos, setTurnos] = useState(null);
@@ -484,11 +446,6 @@ function PanelReserva({ campana, alCambiar }) {
     </form>
   );
 }
-
-/* ====================================================================
-   Cuenta: ingresar y registrarse (mockups 2 y 3: RF-04, RF-07, RF-08)
-   ==================================================================== */
-
 function Ingresar() {
   const { entrar, avisar } = useContext(Ctx);
   const f = useFormulario({ correo: "", contrasena: "" }, {
@@ -524,7 +481,6 @@ function Ingresar() {
   );
 }
 
-/** Barrita que muestra qué tan segura es la contraseña (RF-08: validación de datos). */
 function FuerzaClave({ clave }) {
   const nivel = Validar.fuerza(clave);
   const textos = ["", "Débil", "Aceptable", "Buena", "Muy buena"];
@@ -557,7 +513,7 @@ function Registro() {
   async function enviar(e) {
     e.preventDefault();
     if (!f.validarTodo()) return;
-    const { confirmar, ...datos } = f.valores; // el servidor no necesita la confirmación
+    const { confirmar, ...datos } = f.valores; 
     setEnviando(true);
     try { entrar(await llamar("/auth/registro", { method: "POST", body: JSON.stringify(datos) })); avisar("¡Cuenta creada! Ya puedes reservar turnos.", "ok"); }
     catch (err) { avisar(err.message, "error"); }
@@ -595,11 +551,6 @@ function Registro() {
     </div>
   );
 }
-
-/* ====================================================================
-   Mis reservas, historial y comprobante (RF-14, RF-15)
-   ==================================================================== */
-
 function MisReservas() {
   const { avisar } = useContext(Ctx);
   const [reservas, cargar, cargando] = useCarga("/reservas", []);
@@ -685,13 +636,6 @@ function Comprobante({ id }) {
     </>
   );
 }
-
-/* ====================================================================
-   Nosotros y contacto (Laboratorio 4: información del proyecto y redes sociales)
-   Formulario con los controles vistos en clase: text, select, radio, textarea y checkbox.
-   ==================================================================== */
-
-// Datos de contacto y redes del proyecto. CAMBIA estos enlaces por los de tus cuentas reales.
 const CONTACTO = { correo: "contacto@cuidatusalud.pe", celular: "", direccion: "Arequipa, Perú" };
 const REDES = [
   { nombre: "Facebook", url: "https://www.facebook.com/", ico: "f" },
@@ -803,11 +747,6 @@ function Nosotros() {
     </>
   );
 }
-
-/* ====================================================================
-   Política de privacidad y términos (Ley N.º 29733)
-   ==================================================================== */
-
 function Privacidad() {
   return (
     <div className="tarjeta">
@@ -836,11 +775,6 @@ function Privacidad() {
     </div>
   );
 }
-
-/* ====================================================================
-   Panel de administración (mockup 6 y 7: RF-16 a RF-21)
-   ==================================================================== */
-
 const PESTANAS = [
   ["campanas", "Campañas"],
   ["establecimientos", "Establecimientos"],
@@ -983,7 +917,6 @@ function AdminCampanas() {
   );
 }
 
-/** Define y actualiza el aforo por horario (RF-18). */
 function AdminTurnos({ campana, alCambiar }) {
   const { avisar } = useContext(Ctx);
   const [turnos, cargar, cargando] = useCarga("/turnos?campanaId=" + campana.id, []);
@@ -1198,7 +1131,6 @@ function AdminUsuarios() {
   );
 }
 
-/** Control de asistencia: el personal busca al paciente por DNI y marca que fue atendido. */
 function AdminAsistencia() {
   const { avisar } = useContext(Ctx);
   const [dni, setDni] = useState("");
@@ -1236,7 +1168,6 @@ function AdminAsistencia() {
   );
 }
 
-/** Reportes y estadísticas (RF-19, RF-20, RF-21). */
 function AdminReportes() {
   const { avisar } = useContext(Ctx);
   const [r, , cargando] = useCarga("/reportes/resumen", null);
