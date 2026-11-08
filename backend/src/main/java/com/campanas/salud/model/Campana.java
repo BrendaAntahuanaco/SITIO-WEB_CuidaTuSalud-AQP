@@ -12,12 +12,12 @@ public class Campana {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String vacuna;
-    private String descripcion;
-    private String requisitos;
+    @Column(length = 100) private String vacuna;
+    @Column(length = 1000) private String descripcion;
+    @Column(length = 1000) private String requisitos;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
-    private String fuente;
+    @Column(length = 200) private String fuente;
 
     @Column(length = 20)
     private String estado; // ACTIVA, PROGRAMADA o CERRADA
