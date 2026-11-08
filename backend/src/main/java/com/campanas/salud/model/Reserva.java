@@ -14,7 +14,6 @@ public class Reserva {
     private String beneficiarioDni;
     private String estado = "RESERVADA"; // RESERVADA, CANCELADA o ATENDIDA
     private LocalDateTime fechaReserva = LocalDateTime.now();
-    private LocalDateTime fechaAtencion; // se llena cuando el personal marca la asistencia
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -30,6 +29,4 @@ public class Reserva {
     public void setEstado(String estado) { this.estado = estado; }
     public LocalDateTime getFechaReserva() { return fechaReserva; }
     public void setFechaReserva(LocalDateTime f) { this.fechaReserva = f; }
-    public LocalDateTime getFechaAtencion() { return fechaAtencion; }
-    public void setFechaAtencion(LocalDateTime f) { this.fechaAtencion = f; }
 }

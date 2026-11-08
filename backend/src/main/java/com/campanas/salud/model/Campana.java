@@ -2,60 +2,36 @@ package com.campanas.salud.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 /** Campaña de salud publicada por un administrador. */
 @Entity
 public class Campana {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(length = 100) private String vacuna;
-    @Column(length = 1000) private String descripcion;
-    @Column(length = 1000) private String requisitos;
+    private String vacuna;
+    private String descripcion;
+    private String requisitos;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
-    @Column(length = 200) private String fuente;
-
-    @Column(length = 20)
-    private String estado; // ACTIVA, PROGRAMADA o CERRADA
-
-    private LocalDateTime fechaActualizacion;
+    private String fuente;
 
     @ManyToOne
     private Establecimiento establecimiento;
 
-    @PrePersist
-    @PreUpdate
-    void actualizarFecha() {
-        this.fechaActualizacion = LocalDateTime.now();
-    }
-
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
     public String getVacuna() { return vacuna; }
     public void setVacuna(String vacuna) { this.vacuna = vacuna; }
-
     public String getDescripcion() { return descripcion; }
     public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
-
     public String getRequisitos() { return requisitos; }
     public void setRequisitos(String requisitos) { this.requisitos = requisitos; }
-
     public LocalDate getFechaInicio() { return fechaInicio; }
     public void setFechaInicio(LocalDate fechaInicio) { this.fechaInicio = fechaInicio; }
-
     public LocalDate getFechaFin() { return fechaFin; }
     public void setFechaFin(LocalDate fechaFin) { this.fechaFin = fechaFin; }
-
     public String getFuente() { return fuente; }
     public void setFuente(String fuente) { this.fuente = fuente; }
-
-    public String getEstado() { return estado; }
-    public void setEstado(String estado) { this.estado = estado; }
-
-    public LocalDateTime getFechaActualizacion() { return fechaActualizacion; }
+    public Establecimiento getEstablecimiento() { return establecimiento; }
+    public void setEstablecimiento(Establecimiento e) { this.establecimiento = e; }
 }
