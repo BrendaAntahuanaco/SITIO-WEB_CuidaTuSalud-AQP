@@ -2,6 +2,7 @@ package com.campanas.salud.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 /** Cuenta de ciudadano o administrador. La contraseña se guarda solo como hash. */
 @Entity
@@ -14,6 +15,8 @@ public class Usuario {
     @Column(unique = true) private String correo;
     @JsonIgnore private String contrasenaHash; // nunca se envía en las respuestas
     private String rol = "CIUDADANO";          // CIUDADANO o ADMIN
+    private String estado = "ACTIVO";          // ACTIVO o BAJA
+    private LocalDateTime fechaRegistro = LocalDateTime.now();
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -29,4 +32,12 @@ public class Usuario {
     public void setContrasenaHash(String h) { this.contrasenaHash = h; }
     public String getRol() { return rol; }
     public void setRol(String rol) { this.rol = rol; }
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+    public LocalDateTime getFechaRegistro() { return fechaRegistro; }
+    public void setFechaRegistro(LocalDateTime f) { this.fechaRegistro = f; }
+
+    /** Las cuentas antiguas sin estado se consideran activas. */
+    @JsonIgnore
+    public boolean estaDeBaja() { return "BAJA".equals(estado); }
 }
