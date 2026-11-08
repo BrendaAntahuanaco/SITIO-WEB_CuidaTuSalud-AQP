@@ -1,11 +1,23 @@
+// Aplicación React de Cuida Tu Salud AQP.
+// React y ReactDOM se cargan desde index.html (CDN), por eso aquí no hay "import" y no se usa Node.js.
+// React escapa automáticamente el texto que muestra, lo que protege contra XSS:
+// en todo el código NO se usa dangerouslySetInnerHTML.
 const { useState, useEffect, useRef, useContext, createContext, useCallback } = React;
+
+// El backend (Spring Boot) sirve esta página, así que basta una ruta relativa.
 const API = "/api";
-const Ctx = createContext(null); 
+const Ctx = createContext(null); // comparte sesión, avisos y preferencias con todas las pantallas
+
+/* ====================================================================
+   Utilidades
+   ==================================================================== */
+
 function leerSesion() {
   try { return JSON.parse(localStorage.getItem("sesion")); } catch { return null; }
 }
-let sesionActual = leerSesion(); 
+let sesionActual = leerSesion(); // copia para que llamar() pueda enviar el token
 
+/** Llama al backend con el token de sesión. Si hay error lanza el mensaje que envió el servidor. */
 async function llamar(ruta, opciones = {}) {
   const cabeceras = { "Content-Type": "application/json" };
   if (sesionActual?.token) cabeceras.Authorization = "Bearer " + sesionActual.token;
@@ -29,7 +41,7 @@ async function llamar(ruta, opciones = {}) {
   return datos;
 }
 
-const hoyLima = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }); 
+const hoyLima = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" }); // AAAA-MM-DD
 
 function fecha(s) {
   if (!s) return "—";
@@ -58,6 +70,7 @@ function Insignia({ tabla, estado }) {
   return <span className={"insignia " + clase}>{texto}</span>;
 }
 
+/** Carga datos de la API al abrir la pantalla y permite volver a cargarlos. */
 function useCarga(ruta, inicial = null) {
   const { avisar } = useContext(Ctx);
   const [datos, setDatos] = useState(inicial);
@@ -71,6 +84,7 @@ function useCarga(ruta, inicial = null) {
   return [datos, cargar, cargando];
 }
 
+/** Ruta actual a partir del hash: #/campanas/3  ->  ["campanas", "3"] */
 function useRuta() {
   const leer = () => (window.location.hash.replace(/^#\/?/, "") || "inicio").split("/");
   const [ruta, setRuta] = useState(leer);
@@ -82,64 +96,16 @@ function useRuta() {
   return ruta;
 }
 const ir = (destino) => { window.location.hash = "#/" + destino; };
-function Campo({ id, etiqueta, ayuda, area, error, contador, ...resto }) {
-  const descripcion = [error && id + "-err", ayuda && id + "-ayuda"].filter(Boolean).join(" ") || undefined;
-  const propiedades = { id, "aria-invalid": error ? "true" : undefined, "aria-describedby": descripcion, className: error ? "con-error" : undefined, ...resto };
+
+/** Campo de formulario con su etiqueta (accesible: label + id). */
+function Campo({ id, etiqueta, ayuda, area, ...resto }) {
   return (
     <>
       <label htmlFor={id}>{etiqueta}</label>
-      {area ? <textarea {...propiedades} /> : <input {...propiedades} />}
-      {contador !== undefined && <p className="contador" aria-live="off">{contador} caracteres</p>}
-      {ayuda && <p className="ayuda" id={id + "-ayuda"}>{ayuda}</p>}
-      {error && <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p>}
+      {area ? <textarea id={id} {...resto} /> : <input id={id} {...resto} />}
+      {ayuda && <p className="ayuda">{ayuda}</p>}
     </>
   );
-}
-function ErrorCampo({ id, error }) {
-  return error ? <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p> : null;
-}
-
-function useFormulario(inicial, reglas, prefijo = "f-") {
-  const [valores, setValores] = useState(inicial);
-  const [errores, setErrores] = useState({});
-  const [tocados, setTocados] = useState({});
-  const calcular = (campo, v) => (reglas[campo] ? reglas[campo](v[campo], v) : "");
-
-  const cambiar = (campo, limpiar) => (e) => {
-    const bruto = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-    const valor = limpiar && typeof bruto === "string" ? limpiar(bruto) : bruto;
-    const nuevos = { ...valores, [campo]: valor };
-    const esCasilla = e.target.type === "checkbox" || e.target.type === "radio";
-    const visitados = esCasilla ? { ...tocados, [campo]: true } : tocados; 
-    setValores(nuevos);
-    setTocados(visitados);
-    setErrores((prev) => {
-      const sig = { ...prev };
-      for (const k of Object.keys(reglas)) if (visitados[k]) sig[k] = calcular(k, nuevos); 
-      return sig;
-    });
-  };
-  const alSalir = (campo) => () => {
-    setTocados((t) => ({ ...t, [campo]: true }));
-    setErrores((prev) => ({ ...prev, [campo]: calcular(campo, valores) }));
-  };
-
-  const campo = (nombre, limpiar) => ({
-    id: prefijo + nombre, value: valores[nombre], error: errores[nombre],
-    onChange: cambiar(nombre, limpiar), onBlur: alSalir(nombre),
-  });
-
-  function validarTodo() {
-    const todos = {};
-    for (const k of Object.keys(reglas)) todos[k] = calcular(k, valores);
-    setErrores(todos);
-    setTocados(Object.fromEntries(Object.keys(reglas).map((k) => [k, true])));
-    const primero = Validar.primerError(todos);
-    if (primero) document.getElementById(prefijo + primero)?.focus();
-    return !primero;
-  }
-  const reiniciar = () => { setValores(inicial); setErrores({}); setTocados({}); };
-  return { valores, errores, setValores, cambiar, campo, validarTodo, reiniciar, prefijo };
 }
 
 function Cargando({ cargando, vacio, children }) {
@@ -148,6 +114,7 @@ function Cargando({ cargando, vacio, children }) {
   return children;
 }
 
+/** Pantallas que exigen sesión o rol de administrador (RF-05). */
 function Protegida({ rol, children }) {
   const { sesion } = useContext(Ctx);
   if (!sesion)
@@ -168,6 +135,11 @@ function Protegida({ rol, children }) {
     );
   return children;
 }
+
+/* ====================================================================
+   Inicio (mockup 1: RF-01, RF-02, RF-03)
+   ==================================================================== */
+
 function Inicio() {
   const { sesion, avisar } = useContext(Ctx);
   const [campanas, setCampanas] = useState(null);
@@ -247,6 +219,11 @@ function Inicio() {
     </>
   );
 }
+
+/* ====================================================================
+   Campañas, detalle y reserva (mockups 4 y 5: RF-09 a RF-13)
+   ==================================================================== */
+
 function Campanas({ ruta }) {
   const { avisar } = useContext(Ctx);
   const [filtros, setFiltros] = useState({ vacuna: "", distrito: "", fecha: "", estado: "" });
@@ -348,17 +325,14 @@ function Campanas({ ruta }) {
   );
 }
 
+/** Elegir turno, indicar quién se vacuna y confirmar (RF-12, RF-13). */
 function PanelReserva({ campana, alCambiar }) {
   const { sesion, avisar } = useContext(Ctx);
   const [turnos, setTurnos] = useState(null);
   const [turnoId, setTurnoId] = useState(null);
   const [paraMi, setParaMi] = useState(true);
+  const [otro, setOtro] = useState({ nombre: "", dni: "" });
   const [enviando, setEnviando] = useState(false);
-  const f = useFormulario({ nombre: "", dni: "" }, {
-    nombre: (v) => (paraMi ? "" : Validar.nombre(v, "el nombre de quien se vacunará")),
-    dni: (v) => (paraMi ? "" : Validar.dni(v)),
-  }, "rb" + campana.id + "-");
-  const otro = f.valores;
 
   async function cargar() {
     try { setTurnos(await llamar("/turnos?campanaId=" + campana.id)); }
@@ -384,8 +358,6 @@ function PanelReserva({ campana, alCambiar }) {
 
   async function confirmar(e) {
     e.preventDefault();
-    if (!turnoId) { avisar("Elige un horario para continuar.", "error"); return; }
-    if (!f.validarTodo()) return;
     setEnviando(true);
     try {
       const r = await llamar("/reservas", {
@@ -405,7 +377,7 @@ function PanelReserva({ campana, alCambiar }) {
   }
 
   return (
-    <form className="panel-reserva" onSubmit={confirmar} noValidate aria-label={"Reservar turno de " + campana.vacuna}>
+    <form className="panel-reserva" onSubmit={confirmar} aria-label={"Reservar turno de " + campana.vacuna}>
       <Cargando cargando={turnos === null} vacio={disponibles.length === 0 && "Esta campaña aún no tiene turnos disponibles."}>
         <fieldset className="turnos">
           <legend>1. Elige un horario</legend>
@@ -429,10 +401,12 @@ function PanelReserva({ campana, alCambiar }) {
           </div>
           {!paraMi && (
             <>
-              <Campo etiqueta="Nombre completo de quien se vacunará" autoComplete="off"
-                ayuda="Si es un menor de edad, escribe su nombre: tú, como padre, madre o apoderado, lo acompañarás." {...f.campo("nombre")} />
-              <Campo etiqueta="DNI (8 dígitos)" inputMode="numeric" maxLength={8} autoComplete="off"
-                {...f.campo("dni", (t) => t.replace(/\D/g, ""))} />
+              <Campo id={"bn" + campana.id} etiqueta="Nombre completo de quien se vacunará" value={otro.nombre}
+                onChange={(e) => setOtro({ ...otro, nombre: e.target.value })} required autoComplete="off"
+                ayuda="Si es un menor de edad, escribe su nombre: tú, como padre, madre o apoderado, lo acompañarás." />
+              <Campo id={"bd" + campana.id} etiqueta="DNI (8 dígitos)" value={otro.dni} inputMode="numeric"
+                pattern="\d{8}" maxLength={8} title="8 dígitos" required autoComplete="off"
+                onChange={(e) => setOtro({ ...otro, dni: e.target.value.replace(/\D/g, "") })} />
             </>
           )}
         </fieldset>
@@ -445,20 +419,21 @@ function PanelReserva({ campana, alCambiar }) {
     </form>
   );
 }
+
+/* ====================================================================
+   Cuenta: ingresar y registrarse (mockups 2 y 3: RF-04, RF-07, RF-08)
+   ==================================================================== */
+
 function Ingresar() {
   const { entrar, avisar } = useContext(Ctx);
-  const f = useFormulario({ correo: "", contrasena: "" }, {
-    correo: (v) => Validar.email(v),
-    contrasena: (v) => Validar.obligatorio(v, "tu contraseña"),
-  }, "in-");
+  const [d, setD] = useState({ correo: "", contrasena: "" });
   const [ver, setVer] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   async function enviar(e) {
     e.preventDefault();
-    if (!f.validarTodo()) return;
     setEnviando(true);
-    try { entrar(await llamar("/auth/login", { method: "POST", body: JSON.stringify(f.valores) })); }
+    try { entrar(await llamar("/auth/login", { method: "POST", body: JSON.stringify(d) })); }
     catch (err) { avisar(err.message, "error"); }
     finally { setEnviando(false); }
   }
@@ -466,12 +441,14 @@ function Ingresar() {
   return (
     <div className="tarjeta" style={{ maxWidth: 520 }}>
       <h1>Ingresar</h1>
-      <form onSubmit={enviar} noValidate>
-        <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
-        <Campo etiqueta="Contraseña" type={ver ? "text" : "password"} autoComplete="current-password" {...f.campo("contrasena")} />
+      <form onSubmit={enviar}>
+        <Campo id="correo" etiqueta="Correo electrónico" type="email" autoComplete="email" required
+          value={d.correo} onChange={(e) => setD({ ...d, correo: e.target.value })} />
+        <Campo id="contrasena" etiqueta="Contraseña" type={ver ? "text" : "password"} autoComplete="current-password" required
+          value={d.contrasena} onChange={(e) => setD({ ...d, contrasena: e.target.value })} />
         <div className="marcar">
-          <input id="in-ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
-          <label htmlFor="in-ver">Mostrar contraseña</label>
+          <input id="ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
+          <label htmlFor="ver">Mostrar contraseña</label>
         </div>
         <button className="grande" type="submit" disabled={enviando}>{enviando ? "Ingresando…" : "Ingresar"}</button>
       </form>
@@ -480,41 +457,17 @@ function Ingresar() {
   );
 }
 
-function FuerzaClave({ clave }) {
-  const nivel = Validar.fuerza(clave);
-  const textos = ["", "Débil", "Aceptable", "Buena", "Muy buena"];
-  if (!clave) return null;
-  return (
-    <div className="fuerza" role="status" aria-label={"Seguridad de la contraseña: " + textos[nivel]}>
-      <div className={"barra-fuerza nivel" + nivel}><i /><i /><i /><i /></div>
-      <span>{textos[nivel]}</span>
-    </div>
-  );
-}
-
 function Registro() {
   const { entrar, avisar } = useContext(Ctx);
-  const f = useFormulario(
-    { nombres: "", apellidos: "", dni: "", correo: "", contrasena: "", confirmar: "", aceptaTerminos: false },
-    {
-      nombres: (v) => Validar.nombre(v, "tus nombres"),
-      apellidos: (v) => Validar.nombre(v, "tus apellidos"),
-      dni: (v) => Validar.dni(v),
-      correo: (v) => Validar.email(v),
-      contrasena: (v) => Validar.contrasena(v),
-      confirmar: (v, t) => (Validar.obligatorio(v) ? "Repite tu contraseña." : v !== t.contrasena ? "Las contraseñas no coinciden." : ""),
-      aceptaTerminos: (v) => Validar.marcado(v, "Para crear tu cuenta debes aceptar la política de privacidad."),
-    }, "re-");
+  const [d, setD] = useState({ nombres: "", apellidos: "", dni: "", correo: "", contrasena: "", aceptaTerminos: false });
   const [ver, setVer] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const soloDigitos = (t) => t.replace(/\D/g, "");
+  const cambiar = (campo) => (e) => setD({ ...d, [campo]: e.target.value });
 
   async function enviar(e) {
     e.preventDefault();
-    if (!f.validarTodo()) return;
-    const { confirmar, ...datos } = f.valores; 
     setEnviando(true);
-    try { entrar(await llamar("/auth/registro", { method: "POST", body: JSON.stringify(datos) })); avisar("¡Cuenta creada! Ya puedes reservar turnos.", "ok"); }
+    try { entrar(await llamar("/auth/registro", { method: "POST", body: JSON.stringify(d) })); avisar("¡Cuenta creada! Ya puedes reservar turnos.", "ok"); }
     catch (err) { avisar(err.message, "error"); }
     finally { setEnviando(false); }
   }
@@ -522,34 +475,37 @@ function Registro() {
   return (
     <div className="tarjeta" style={{ maxWidth: 560 }}>
       <h1>Crear cuenta</h1>
-      <p className="ayuda">Pedimos solo lo necesario: tu nombre, DNI y correo. Todos los datos son obligatorios.</p>
-      <form onSubmit={enviar} noValidate>
-        <Campo etiqueta="Nombres" autoComplete="given-name" {...f.campo("nombres")} />
-        <Campo etiqueta="Apellidos" autoComplete="family-name" {...f.campo("apellidos")} />
-        <Campo etiqueta="DNI (8 dígitos)" inputMode="numeric" maxLength={8} autoComplete="off" {...f.campo("dni", soloDigitos)} />
-        <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
-        <Campo etiqueta="Contraseña (mínimo 6 caracteres)" type={ver ? "text" : "password"} autoComplete="new-password" {...f.campo("contrasena")} />
-        <FuerzaClave clave={f.valores.contrasena} />
-        <Campo etiqueta="Repite la contraseña" type={ver ? "text" : "password"} autoComplete="new-password" {...f.campo("confirmar")} />
+      <p className="ayuda">Pedimos solo lo necesario: tu nombre, DNI y correo.</p>
+      <form onSubmit={enviar}>
+        <Campo id="nombres" etiqueta="Nombres" value={d.nombres} onChange={cambiar("nombres")} required autoComplete="given-name" />
+        <Campo id="apellidos" etiqueta="Apellidos" value={d.apellidos} onChange={cambiar("apellidos")} required autoComplete="family-name" />
+        <Campo id="dni" etiqueta="DNI (8 dígitos)" value={d.dni} inputMode="numeric" pattern="\d{8}" maxLength={8}
+          title="8 dígitos" required autoComplete="off" onChange={(e) => setD({ ...d, dni: e.target.value.replace(/\D/g, "") })} />
+        <Campo id="correo" etiqueta="Correo electrónico" type="email" value={d.correo} onChange={cambiar("correo")} required autoComplete="email" />
+        <Campo id="contrasena" etiqueta="Contraseña (mínimo 6 caracteres)" type={ver ? "text" : "password"} minLength={6}
+          value={d.contrasena} onChange={cambiar("contrasena")} required autoComplete="new-password" />
         <div className="marcar">
-          <input id="re-ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
-          <label htmlFor="re-ver">Mostrar contraseñas</label>
+          <input id="ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
+          <label htmlFor="ver">Mostrar contraseña</label>
         </div>
         <div className="marcar">
-          <input id="re-aceptaTerminos" type="checkbox" checked={f.valores.aceptaTerminos} onChange={f.cambiar("aceptaTerminos")}
-            aria-invalid={f.errores.aceptaTerminos ? "true" : undefined} aria-describedby={f.errores.aceptaTerminos ? "re-aceptaTerminos-err" : undefined} />
-          <label htmlFor="re-aceptaTerminos">
+          <input id="acepta" type="checkbox" required checked={d.aceptaTerminos} onChange={(e) => setD({ ...d, aceptaTerminos: e.target.checked })} />
+          <label htmlFor="acepta">
             Acepto la <a href="#/privacidad" target="_blank" rel="noopener noreferrer">política de privacidad y los términos de uso</a> y
             autorizo el uso de mis datos para reservar turnos.
           </label>
         </div>
-        <ErrorCampo id="re-aceptaTerminos" error={f.errores.aceptaTerminos} />
         <button className="grande" type="submit" disabled={enviando}>{enviando ? "Creando…" : "Crear mi cuenta"}</button>
       </form>
       <p style={{ marginTop: "1rem" }}>¿Ya tienes cuenta? <a href="#/ingresar">Ingresar</a></p>
     </div>
   );
 }
+
+/* ====================================================================
+   Mis reservas, historial y comprobante (RF-14, RF-15)
+   ==================================================================== */
+
 function MisReservas() {
   const { avisar } = useContext(Ctx);
   const [reservas, cargar, cargando] = useCarga("/reservas", []);
@@ -635,117 +591,11 @@ function Comprobante({ id }) {
     </>
   );
 }
-const CONTACTO = { correo: "contacto@cuidatusalud.pe", celular: "", direccion: "Arequipa, Perú" };
-const REDES = [
-  { nombre: "Facebook", url: "https://www.facebook.com/", ico: "f" },
-  { nombre: "Instagram", url: "https://www.instagram.com/", ico: "i" },
-  { nombre: "WhatsApp", url: "https://wa.me/", ico: "w" },
-  { nombre: "YouTube", url: "https://www.youtube.com/", ico: "y" },
-];
-const INTEGRANTES = ["Antahuanaco Ticona, Brenda Adeli", "Ramos Gallegos, Maythee Alexandra", "Roque Sullca, Waldemar Emil"];
-const MOTIVOS = ["Duda sobre una campaña", "Ayuda para reservar un turno", "Error en la página", "Sugerencia", "Otro"];
 
-function RedesSociales() {
-  return (
-    <ul className="redes" aria-label="Redes sociales">
-      {REDES.map((r) => (
-        <li key={r.nombre}>
-          <a href={r.url} target="_blank" rel="noopener noreferrer" aria-label={r.nombre + " (se abre en otra pestaña)"}>
-            <span className="ico" aria-hidden="true">{r.ico}</span>{r.nombre}
-          </a>
-        </li>
-      ))}
-    </ul>
-  );
-}
+/* ====================================================================
+   Política de privacidad y términos (Ley N.º 29733)
+   ==================================================================== */
 
-function Nosotros() {
-  const { avisar } = useContext(Ctx);
-  const f = useFormulario({ nombre: "", correo: "", celular: "", motivo: "", respuesta: "", mensaje: "", acepta: false }, {
-    nombre: (v) => Validar.nombre(v, "tu nombre"),
-    correo: (v) => Validar.email(v),
-    celular: (v) => Validar.telefono(v, true),
-    motivo: (v) => Validar.seleccion(v, "el motivo de tu mensaje"),
-    respuesta: (v) => Validar.grupo(v, "Elige cómo prefieres que te respondamos."),
-    mensaje: (v) => Validar.minimo(v, 10, "tu mensaje") || Validar.maximo(v, 500),
-    acepta: (v) => Validar.marcado(v, "Debes aceptar el uso de tus datos para poder responderte."),
-  }, "co-");
-  const [enviado, setEnviado] = useState(null);
-  const { valores: v, errores: er } = f;
-
-  function enviar(e) {
-    e.preventDefault();
-    if (!f.validarTodo()) return;
-    // Este prototipo no guarda mensajes en el servidor: se abre el programa de correo con el texto ya escrito.
-    const cuerpo = `${v.mensaje}\n\n— ${v.nombre}\nCorreo: ${v.correo}${v.celular ? "\nCelular: " + v.celular : ""}\nPrefiere respuesta por: ${v.respuesta}`;
-    window.location.href = `mailto:${CONTACTO.correo}?subject=${encodeURIComponent(v.motivo)}&body=${encodeURIComponent(cuerpo)}`;
-    setEnviado(v.nombre.trim());
-    avisar("Mensaje preparado. Se abrió tu programa de correo para enviarlo.", "ok");
-    f.reiniciar();
-  }
-
-  return (
-    <>
-      <h1>Nosotros y contacto</h1>
-      <div className="tarjeta">
-        <h2>¿Qué es Cuida Tu Salud AQP?</h2>
-        <p>
-          Es una plataforma web para consultar en un solo lugar las campañas de vacunación de Arequipa y reservar turnos con
-          control de cupos, para reducir la desinformación, las colas y las aglomeraciones en los establecimientos de salud.
-          Es un proyecto del curso de Programación Web.
-        </p>
-        <h3>Equipo</h3>
-        <ul>{INTEGRANTES.map((i) => <li key={i}>{i}</li>)}</ul>
-        <h3>Datos de contacto</h3>
-        <p><b>Correo:</b> <a href={"mailto:" + CONTACTO.correo}>{CONTACTO.correo}</a>
-          {CONTACTO.celular && <><br /><b>Celular:</b> {CONTACTO.celular}</>}
-          <br /><b>Ubicación:</b> {CONTACTO.direccion}</p>
-        <h3>Síguenos</h3>
-        <RedesSociales />
-      </div>
-
-      <div className="tarjeta" style={{ maxWidth: 640 }}>
-        <h2>Escríbenos</h2>
-        {enviado && <p className="mensaje ok" role="status">Gracias, {enviado}. Revisa tu programa de correo para enviar el mensaje.</p>}
-        <form onSubmit={enviar} noValidate>
-          <Campo etiqueta="Tu nombre" autoComplete="name" {...f.campo("nombre")} />
-          <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
-          <Campo etiqueta="Celular (opcional)" type="tel" inputMode="tel" autoComplete="tel" ayuda="9 dígitos, empieza con 9. Ej. 987654321"
-            {...f.campo("celular")} />
-
-          <label htmlFor="co-motivo">Motivo</label>
-          <select id="co-motivo" value={v.motivo} onChange={f.cambiar("motivo")} onBlur={f.campo("motivo").onBlur} className={er.motivo ? "con-error" : undefined}
-            aria-invalid={er.motivo ? "true" : undefined} aria-describedby={er.motivo ? "co-motivo-err" : undefined}>
-            <option value="">- Selecciona un motivo -</option>
-            {MOTIVOS.map((m) => <option key={m}>{m}</option>)}
-          </select>
-          <ErrorCampo id="co-motivo" error={er.motivo} />
-
-          <fieldset className="turnos" aria-describedby={er.respuesta ? "co-respuesta-err" : undefined}>
-            <legend>¿Cómo prefieres que te respondamos?</legend>
-            {["Correo", "WhatsApp", "Llamada"].map((o) => (
-              <div className="marcar" key={o}>
-                <input id={"co-resp-" + o} type="radio" name="respuesta" value={o} checked={v.respuesta === o} onChange={f.cambiar("respuesta")} />
-                <label htmlFor={"co-resp-" + o}>{o}</label>
-              </div>
-            ))}
-          </fieldset>
-          <ErrorCampo id="co-respuesta" error={er.respuesta} />
-
-          <Campo area rows={5} maxLength={600} etiqueta="Mensaje" contador={v.mensaje.length + " de 500"} {...f.campo("mensaje")} />
-
-          <div className="marcar">
-            <input id="co-acepta" type="checkbox" checked={v.acepta} onChange={f.cambiar("acepta")}
-              aria-invalid={er.acepta ? "true" : undefined} aria-describedby={er.acepta ? "co-acepta-err" : undefined} />
-            <label htmlFor="co-acepta">Acepto que usen mis datos solo para responderme (<a href="#/privacidad" target="_blank" rel="noopener noreferrer">ver privacidad</a>).</label>
-          </div>
-          <ErrorCampo id="co-acepta" error={er.acepta} />
-          <button className="grande" type="submit">Preparar mensaje</button>
-        </form>
-      </div>
-    </>
-  );
-}
 function Privacidad() {
   return (
     <div className="tarjeta">
@@ -774,6 +624,11 @@ function Privacidad() {
     </div>
   );
 }
+
+/* ====================================================================
+   Panel de administración (mockup 6 y 7: RF-16 a RF-21)
+   ==================================================================== */
+
 const PESTANAS = [
   ["campanas", "Campañas"],
   ["establecimientos", "Establecimientos"],
@@ -916,6 +771,7 @@ function AdminCampanas() {
   );
 }
 
+/** Define y actualiza el aforo por horario (RF-18). */
 function AdminTurnos({ campana, alCambiar }) {
   const { avisar } = useContext(Ctx);
   const [turnos, cargar, cargando] = useCarga("/turnos?campanaId=" + campana.id, []);
@@ -1130,6 +986,7 @@ function AdminUsuarios() {
   );
 }
 
+/** Control de asistencia: el personal busca al paciente por DNI y marca que fue atendido. */
 function AdminAsistencia() {
   const { avisar } = useContext(Ctx);
   const [dni, setDni] = useState("");
@@ -1167,6 +1024,7 @@ function AdminAsistencia() {
   );
 }
 
+/** Reportes y estadísticas (RF-19, RF-20, RF-21). */
 function AdminReportes() {
   const { avisar } = useContext(Ctx);
   const [r, , cargando] = useCarga("/reportes/resumen", null);
@@ -1275,43 +1133,18 @@ function AdminBitacora() {
   );
 }
 
+/* ====================================================================
+   Componente principal: header, nav, main y footer
+   ==================================================================== */
+
 function Logo() {
+  // Logo propio: cruz de salud sobre el volcán Misti
   return (
     <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
       <rect width="64" height="64" rx="14" fill="#fff" />
       <path d="M4 58 L26 24 L34 34 L40 27 L60 58 Z" fill="#9fd3cb" />
       <path d="M27 8h10v11h11v10H37v11H27V29H16V19h11z" fill="#0f6b63" />
     </svg>
-  );
-}
-function Bienvenida({ sesion }) {
-  const [visible, setVisible] = useState(() => {
-    try { return !sessionStorage.getItem("bienvenida"); } catch { return true; }
-  });
-  const cerrar = useCallback(() => {
-    setVisible(false);
-    try { sessionStorage.setItem("bienvenida", "1"); } catch { /* sin almacenamiento */ }
-  }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    const alTeclear = (e) => { if (e.key === "Escape") cerrar(); }; 
-    document.addEventListener("keydown", alTeclear);
-    return () => document.removeEventListener("keydown", alTeclear);
-  }, [visible]);
-
-  if (!visible) return null;
-  const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Lima" })) % 24;
-  const saludo = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
-  return (
-    <section className="bienvenida" role="status" aria-label="Mensaje de bienvenida">
-      <p>
-        <b>{saludo}{sesion ? ", " + sesion.nombres : ""}. Bienvenido(a) a Cuida Tu Salud AQP.</b><br />
-        Aquí puedes ver las campañas de vacunación de Arequipa y reservar tu turno sin hacer cola.
-        Si necesitas ayuda, pide a un familiar que te acompañe a reservar.
-      </p>
-      <button className="secundario" onClick={cerrar}>Entendido</button>
-    </section>
   );
 }
 
@@ -1323,22 +1156,25 @@ function leerPref() {
 function App() {
   const ruta = useRuta();
   const [sesion, setSesion] = useState(leerSesion);
-  const [mensaje, setMensaje] = useState(null); 
+  const [mensaje, setMensaje] = useState(null); // { texto, tipo }
   const [pref, setPref] = useState(leerPref);
   const temporizador = useRef(null);
   const principal = useRef(null);
 
+  // Preferencias de accesibilidad: tamaño de letra y alto contraste
   useEffect(() => {
     document.documentElement.style.setProperty("--escala", pref.escala);
     document.documentElement.dataset.contraste = pref.contraste ? "alto" : "normal";
     try { localStorage.setItem("pref", JSON.stringify(pref)); } catch { /* sin almacenamiento */ }
   }, [pref]);
 
+  // Al cambiar de pantalla: subir al inicio y mover el foco al contenido (lectores de pantalla)
   useEffect(() => {
     window.scrollTo(0, 0);
     principal.current?.focus({ preventScroll: true });
   }, [ruta.join("/")]);
 
+  /** Muestra un aviso verde ("ok") o rojo ("error") por unos segundos. */
   const avisar = useCallback((texto, tipo) => {
     clearTimeout(temporizador.current);
     setMensaje({ texto, tipo });
@@ -1359,6 +1195,7 @@ function App() {
     if (aviso) avisar(aviso, "error");
   }, []);
 
+  // El servidor respondió 401: el token venció
   useEffect(() => {
     const f = () => salir("Tu sesión venció. Ingresa de nuevo.");
     window.addEventListener("sesion-vencida", f);
@@ -1385,7 +1222,6 @@ function App() {
     case "comprobante": pantalla = <Protegida><Comprobante id={ruta[1]} /></Protegida>; break;
     case "admin": pantalla = <Admin ruta={ruta} />; break;
     case "privacidad": pantalla = <Privacidad />; break;
-    case "nosotros": pantalla = <Nosotros />; break;
     case "inicio": pantalla = <Inicio />; break;
     default:
       pantalla = <div className="tarjeta"><h1>Página no encontrada</h1><a className="boton" href="#/inicio">Ir al inicio</a></div>;
@@ -1414,7 +1250,6 @@ function App() {
           <ul>
             {enlace("inicio", "Inicio", seccion === "inicio")}
             {enlace("campanas", "Campañas", seccion === "campanas")}
-            {enlace("nosotros", "Nosotros y contacto", seccion === "nosotros")}
             {sesion && sesion.rol !== "ADMIN" && enlace("mis-reservas", "Mis reservas", seccion === "mis-reservas" || seccion === "comprobante")}
             {sesion?.rol === "ADMIN" && enlace("admin/campanas", "Administración", seccion === "admin")}
             {!sesion && <li className="derecha"><a href="#/ingresar" aria-current={seccion === "ingresar" ? "page" : undefined}>Ingresar</a></li>}
@@ -1436,15 +1271,14 @@ function App() {
               </div>
             )}
           </div>
-          <Bienvenida sesion={sesion} />
           {pantalla}
         </main>
 
         <footer id="pie">
           <div>
             Proyecto de Programación Web · Arequipa 2026 ·{" "}
-            <a href="#/privacidad">Privacidad y términos</a> · <a href="#/nosotros">Nosotros y contacto</a>
-            <RedesSociales />
+            <a href="#/privacidad">Privacidad y términos</a>
+            <br />
             Prototipo con datos de prueba. Esta página informa y organiza turnos; no da diagnósticos médicos.
           </div>
         </footer>
@@ -1453,4 +1287,5 @@ function App() {
   );
 }
 
+// Dibuja la aplicación dentro del div "root" de index.html
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
