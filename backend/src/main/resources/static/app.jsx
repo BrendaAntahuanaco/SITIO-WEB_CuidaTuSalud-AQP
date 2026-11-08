@@ -1,7 +1,4 @@
-// Aplicación React de Cuida Tu Salud AQP.
-// React y ReactDOM se cargan desde index.html (CDN), por eso aquí no hay "import" y no se usa Node.js.
-// React escapa automáticamente el texto que muestra, lo que protege contra XSS:
-// en todo el código NO se usa dangerouslySetInnerHTML.
+
 const { useState, useEffect, useRef, useContext, createContext, useCallback } = React;
 
 // El backend (Spring Boot) sirve esta página, así que basta una ruta relativa.
