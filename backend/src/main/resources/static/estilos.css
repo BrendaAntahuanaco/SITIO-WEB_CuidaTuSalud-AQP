@@ -213,6 +213,32 @@ td button { min-height: 44px; padding: .3rem .8rem; font-size: .9rem; }
 .comprobante dd { margin: 0; }
 .codigo { font-size: 1.6rem; font-weight: 800; letter-spacing: .06em; color: var(--primario-oscuro); }
 
+/* ---------- Validación de formularios ---------- */
+input.con-error, select.con-error, textarea.con-error { border-color: var(--error); background: var(--error-claro); }
+.error-campo { color: var(--error); font-weight: 700; margin: .3rem 0 .8rem; }
+.contador { text-align: right; color: var(--suave); font-size: .85rem; margin: .1rem 0 .5rem; }
+.fuerza { display: flex; align-items: center; gap: .7rem; margin: .1rem 0 .9rem; font-size: .9rem; color: var(--suave); }
+.barra-fuerza { display: flex; gap: 4px; flex: 1; max-width: 220px; }
+.barra-fuerza i { flex: 1; height: .5rem; border-radius: 4px; background: #d5e1df; }
+.barra-fuerza.nivel1 i:nth-child(-n+1) { background: var(--error); }
+.barra-fuerza.nivel2 i:nth-child(-n+2) { background: var(--acento); }
+.barra-fuerza.nivel3 i:nth-child(-n+3), .barra-fuerza.nivel4 i { background: var(--ok); }
+
+/* ---------- Bienvenida, redes sociales y efectos del ratón (onMouseOver / onMouseOut) ---------- */
+.bienvenida { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: var(--primario-claro); border: 2px solid var(--primario); border-radius: var(--radio); padding: .9rem 1.1rem; margin-bottom: 1rem; }
+.bienvenida p { margin: 0; flex: 1 1 280px; }
+.redes { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; margin: .4rem 0 0; padding: 0; }
+.redes a { display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; padding: 0 .9rem; border: 2px solid var(--primario);
+  border-radius: 999px; text-decoration: none; font-weight: 700; background: #fff; transition: background .15s, color .15s; }
+.redes a:hover, .redes a:focus-visible { background: var(--primario); color: #fff; }
+.redes .ico { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--primario-claro);
+  color: var(--primario-oscuro); font-weight: 800; text-transform: uppercase; }
+#pie .redes { justify-content: center; margin-top: .6rem; }
+.rejilla .tarjeta { transition: transform .15s, box-shadow .15s; }
+.rejilla .tarjeta:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(20, 40, 42, .15); }
+input:focus, select:focus, textarea:focus { background: #fffbe8; }
+
 .solo-impresion { display: none; }
 
 /* ---------- Pantallas pequeñas ---------- */
@@ -229,7 +255,7 @@ td button { min-height: 44px; padding: .3rem .8rem; font-size: .9rem; }
 /* ---------- Impresión (comprobante y reportes) ---------- */
 @media print {
   body { background: #fff; font-size: 12pt; }
-  .saltar, #cabecera, #menu, #pie, #avisos-vivos, .no-imprimir, .pestanas { display: none !important; }
+  .saltar, #cabecera, #menu, #pie, #avisos-vivos, .no-imprimir, .pestanas, .bienvenida { display: none !important; }
   .solo-impresion { display: block; }
   main { max-width: none; padding: 0; }
   .comprobante, .tarjeta, .cifra { box-shadow: none; break-inside: avoid; }
