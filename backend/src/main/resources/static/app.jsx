@@ -95,7 +95,6 @@ function Campo({ id, etiqueta, ayuda, area, error, contador, ...resto }) {
     </>
   );
 }
-/
 function ErrorCampo({ id, error }) {
   return error ? <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p> : null;
 }
