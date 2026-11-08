@@ -97,15 +97,76 @@ function useRuta() {
 }
 const ir = (destino) => { window.location.hash = "#/" + destino; };
 
-/** Campo de formulario con su etiqueta (accesible: label + id). */
-function Campo({ id, etiqueta, ayuda, area, ...resto }) {
+/** Campo de formulario con su etiqueta (accesible: label + id) y su mensaje de error (aria-invalid / aria-describedby). */
+function Campo({ id, etiqueta, ayuda, area, error, contador, ...resto }) {
+  const descripcion = [error && id + "-err", ayuda && id + "-ayuda"].filter(Boolean).join(" ") || undefined;
+  const propiedades = { id, "aria-invalid": error ? "true" : undefined, "aria-describedby": descripcion, className: error ? "con-error" : undefined, ...resto };
   return (
     <>
       <label htmlFor={id}>{etiqueta}</label>
-      {area ? <textarea id={id} {...resto} /> : <input id={id} {...resto} />}
-      {ayuda && <p className="ayuda">{ayuda}</p>}
+      {area ? <textarea {...propiedades} /> : <input {...propiedades} />}
+      {contador !== undefined && <p className="contador" aria-live="off">{contador} caracteres</p>}
+      {ayuda && <p className="ayuda" id={id + "-ayuda"}>{ayuda}</p>}
+      {error && <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p>}
     </>
   );
+}
+
+/** Mensaje de error de una casilla o grupo de opciones (checkbox / radiobutton). */
+function ErrorCampo({ id, error }) {
+  return error ? <p className="error-campo" id={id + "-err"} role="alert">⚠ {error}</p> : null;
+}
+
+/**
+ * Formulario con validación (Semana 3: eventos onFocus / onBlur / onSubmit y validación de formularios).
+ *  - onChange: actualiza el valor y, si el campo ya se visitó, lo vuelve a validar en vivo.
+ *  - onBlur: al salir del campo se valida ("el campo pierde el foco").
+ *  - onFocus: el campo enfocado se resalta con CSS (:focus) y validarTodo() usa focus() para llevar a la persona al primer error.
+ *  - validarTodo(): al enviar valida todo y pone el foco (focus()) en el primer campo con error.
+ * "reglas" es { campo: (valor, todosLosValores) => "mensaje de error" o "" } y usa Validar (validaciones.js).
+ */
+function useFormulario(inicial, reglas, prefijo = "f-") {
+  const [valores, setValores] = useState(inicial);
+  const [errores, setErrores] = useState({});
+  const [tocados, setTocados] = useState({});
+  const calcular = (campo, v) => (reglas[campo] ? reglas[campo](v[campo], v) : "");
+
+  const cambiar = (campo, limpiar) => (e) => {
+    const bruto = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    const valor = limpiar && typeof bruto === "string" ? limpiar(bruto) : bruto;
+    const nuevos = { ...valores, [campo]: valor };
+    const esCasilla = e.target.type === "checkbox" || e.target.type === "radio";
+    const visitados = esCasilla ? { ...tocados, [campo]: true } : tocados; // casillas y radios se validan al marcarlos
+    setValores(nuevos);
+    setTocados(visitados);
+    setErrores((prev) => {
+      const sig = { ...prev };
+      for (const k of Object.keys(reglas)) if (visitados[k]) sig[k] = calcular(k, nuevos); // revalida solo lo ya visitado
+      return sig;
+    });
+  };
+  const alSalir = (campo) => () => {
+    setTocados((t) => ({ ...t, [campo]: true }));
+    setErrores((prev) => ({ ...prev, [campo]: calcular(campo, valores) }));
+  };
+
+  /** Propiedades listas para un <Campo>: id, value, onChange, onBlur y error. */
+  const campo = (nombre, limpiar) => ({
+    id: prefijo + nombre, value: valores[nombre], error: errores[nombre],
+    onChange: cambiar(nombre, limpiar), onBlur: alSalir(nombre),
+  });
+
+  function validarTodo() {
+    const todos = {};
+    for (const k of Object.keys(reglas)) todos[k] = calcular(k, valores);
+    setErrores(todos);
+    setTocados(Object.fromEntries(Object.keys(reglas).map((k) => [k, true])));
+    const primero = Validar.primerError(todos);
+    if (primero) document.getElementById(prefijo + primero)?.focus();
+    return !primero;
+  }
+  const reiniciar = () => { setValores(inicial); setErrores({}); setTocados({}); };
+  return { valores, errores, setValores, cambiar, campo, validarTodo, reiniciar, prefijo };
 }
 
 function Cargando({ cargando, vacio, children }) {
@@ -331,8 +392,12 @@ function PanelReserva({ campana, alCambiar }) {
   const [turnos, setTurnos] = useState(null);
   const [turnoId, setTurnoId] = useState(null);
   const [paraMi, setParaMi] = useState(true);
-  const [otro, setOtro] = useState({ nombre: "", dni: "" });
   const [enviando, setEnviando] = useState(false);
+  const f = useFormulario({ nombre: "", dni: "" }, {
+    nombre: (v) => (paraMi ? "" : Validar.nombre(v, "el nombre de quien se vacunará")),
+    dni: (v) => (paraMi ? "" : Validar.dni(v)),
+  }, "rb" + campana.id + "-");
+  const otro = f.valores;
 
   async function cargar() {
     try { setTurnos(await llamar("/turnos?campanaId=" + campana.id)); }
@@ -358,6 +423,8 @@ function PanelReserva({ campana, alCambiar }) {
 
   async function confirmar(e) {
     e.preventDefault();
+    if (!turnoId) { avisar("Elige un horario para continuar.", "error"); return; }
+    if (!f.validarTodo()) return;
     setEnviando(true);
     try {
       const r = await llamar("/reservas", {
@@ -377,7 +444,7 @@ function PanelReserva({ campana, alCambiar }) {
   }
 
   return (
-    <form className="panel-reserva" onSubmit={confirmar} aria-label={"Reservar turno de " + campana.vacuna}>
+    <form className="panel-reserva" onSubmit={confirmar} noValidate aria-label={"Reservar turno de " + campana.vacuna}>
       <Cargando cargando={turnos === null} vacio={disponibles.length === 0 && "Esta campaña aún no tiene turnos disponibles."}>
         <fieldset className="turnos">
           <legend>1. Elige un horario</legend>
@@ -401,12 +468,10 @@ function PanelReserva({ campana, alCambiar }) {
           </div>
           {!paraMi && (
             <>
-              <Campo id={"bn" + campana.id} etiqueta="Nombre completo de quien se vacunará" value={otro.nombre}
-                onChange={(e) => setOtro({ ...otro, nombre: e.target.value })} required autoComplete="off"
-                ayuda="Si es un menor de edad, escribe su nombre: tú, como padre, madre o apoderado, lo acompañarás." />
-              <Campo id={"bd" + campana.id} etiqueta="DNI (8 dígitos)" value={otro.dni} inputMode="numeric"
-                pattern="\d{8}" maxLength={8} title="8 dígitos" required autoComplete="off"
-                onChange={(e) => setOtro({ ...otro, dni: e.target.value.replace(/\D/g, "") })} />
+              <Campo etiqueta="Nombre completo de quien se vacunará" autoComplete="off"
+                ayuda="Si es un menor de edad, escribe su nombre: tú, como padre, madre o apoderado, lo acompañarás." {...f.campo("nombre")} />
+              <Campo etiqueta="DNI (8 dígitos)" inputMode="numeric" maxLength={8} autoComplete="off"
+                {...f.campo("dni", (t) => t.replace(/\D/g, ""))} />
             </>
           )}
         </fieldset>
@@ -426,14 +491,18 @@ function PanelReserva({ campana, alCambiar }) {
 
 function Ingresar() {
   const { entrar, avisar } = useContext(Ctx);
-  const [d, setD] = useState({ correo: "", contrasena: "" });
+  const f = useFormulario({ correo: "", contrasena: "" }, {
+    correo: (v) => Validar.email(v),
+    contrasena: (v) => Validar.obligatorio(v, "tu contraseña"),
+  }, "in-");
   const [ver, setVer] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   async function enviar(e) {
     e.preventDefault();
+    if (!f.validarTodo()) return;
     setEnviando(true);
-    try { entrar(await llamar("/auth/login", { method: "POST", body: JSON.stringify(d) })); }
+    try { entrar(await llamar("/auth/login", { method: "POST", body: JSON.stringify(f.valores) })); }
     catch (err) { avisar(err.message, "error"); }
     finally { setEnviando(false); }
   }
@@ -441,14 +510,12 @@ function Ingresar() {
   return (
     <div className="tarjeta" style={{ maxWidth: 520 }}>
       <h1>Ingresar</h1>
-      <form onSubmit={enviar}>
-        <Campo id="correo" etiqueta="Correo electrónico" type="email" autoComplete="email" required
-          value={d.correo} onChange={(e) => setD({ ...d, correo: e.target.value })} />
-        <Campo id="contrasena" etiqueta="Contraseña" type={ver ? "text" : "password"} autoComplete="current-password" required
-          value={d.contrasena} onChange={(e) => setD({ ...d, contrasena: e.target.value })} />
+      <form onSubmit={enviar} noValidate>
+        <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
+        <Campo etiqueta="Contraseña" type={ver ? "text" : "password"} autoComplete="current-password" {...f.campo("contrasena")} />
         <div className="marcar">
-          <input id="ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
-          <label htmlFor="ver">Mostrar contraseña</label>
+          <input id="in-ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
+          <label htmlFor="in-ver">Mostrar contraseña</label>
         </div>
         <button className="grande" type="submit" disabled={enviando}>{enviando ? "Ingresando…" : "Ingresar"}</button>
       </form>
@@ -457,17 +524,42 @@ function Ingresar() {
   );
 }
 
+/** Barrita que muestra qué tan segura es la contraseña (RF-08: validación de datos). */
+function FuerzaClave({ clave }) {
+  const nivel = Validar.fuerza(clave);
+  const textos = ["", "Débil", "Aceptable", "Buena", "Muy buena"];
+  if (!clave) return null;
+  return (
+    <div className="fuerza" role="status" aria-label={"Seguridad de la contraseña: " + textos[nivel]}>
+      <div className={"barra-fuerza nivel" + nivel}><i /><i /><i /><i /></div>
+      <span>{textos[nivel]}</span>
+    </div>
+  );
+}
+
 function Registro() {
   const { entrar, avisar } = useContext(Ctx);
-  const [d, setD] = useState({ nombres: "", apellidos: "", dni: "", correo: "", contrasena: "", aceptaTerminos: false });
+  const f = useFormulario(
+    { nombres: "", apellidos: "", dni: "", correo: "", contrasena: "", confirmar: "", aceptaTerminos: false },
+    {
+      nombres: (v) => Validar.nombre(v, "tus nombres"),
+      apellidos: (v) => Validar.nombre(v, "tus apellidos"),
+      dni: (v) => Validar.dni(v),
+      correo: (v) => Validar.email(v),
+      contrasena: (v) => Validar.contrasena(v),
+      confirmar: (v, t) => (Validar.obligatorio(v) ? "Repite tu contraseña." : v !== t.contrasena ? "Las contraseñas no coinciden." : ""),
+      aceptaTerminos: (v) => Validar.marcado(v, "Para crear tu cuenta debes aceptar la política de privacidad."),
+    }, "re-");
   const [ver, setVer] = useState(false);
   const [enviando, setEnviando] = useState(false);
-  const cambiar = (campo) => (e) => setD({ ...d, [campo]: e.target.value });
+  const soloDigitos = (t) => t.replace(/\D/g, "");
 
   async function enviar(e) {
     e.preventDefault();
+    if (!f.validarTodo()) return;
+    const { confirmar, ...datos } = f.valores; // el servidor no necesita la confirmación
     setEnviando(true);
-    try { entrar(await llamar("/auth/registro", { method: "POST", body: JSON.stringify(d) })); avisar("¡Cuenta creada! Ya puedes reservar turnos.", "ok"); }
+    try { entrar(await llamar("/auth/registro", { method: "POST", body: JSON.stringify(datos) })); avisar("¡Cuenta creada! Ya puedes reservar turnos.", "ok"); }
     catch (err) { avisar(err.message, "error"); }
     finally { setEnviando(false); }
   }
@@ -475,26 +567,28 @@ function Registro() {
   return (
     <div className="tarjeta" style={{ maxWidth: 560 }}>
       <h1>Crear cuenta</h1>
-      <p className="ayuda">Pedimos solo lo necesario: tu nombre, DNI y correo.</p>
-      <form onSubmit={enviar}>
-        <Campo id="nombres" etiqueta="Nombres" value={d.nombres} onChange={cambiar("nombres")} required autoComplete="given-name" />
-        <Campo id="apellidos" etiqueta="Apellidos" value={d.apellidos} onChange={cambiar("apellidos")} required autoComplete="family-name" />
-        <Campo id="dni" etiqueta="DNI (8 dígitos)" value={d.dni} inputMode="numeric" pattern="\d{8}" maxLength={8}
-          title="8 dígitos" required autoComplete="off" onChange={(e) => setD({ ...d, dni: e.target.value.replace(/\D/g, "") })} />
-        <Campo id="correo" etiqueta="Correo electrónico" type="email" value={d.correo} onChange={cambiar("correo")} required autoComplete="email" />
-        <Campo id="contrasena" etiqueta="Contraseña (mínimo 6 caracteres)" type={ver ? "text" : "password"} minLength={6}
-          value={d.contrasena} onChange={cambiar("contrasena")} required autoComplete="new-password" />
+      <p className="ayuda">Pedimos solo lo necesario: tu nombre, DNI y correo. Todos los datos son obligatorios.</p>
+      <form onSubmit={enviar} noValidate>
+        <Campo etiqueta="Nombres" autoComplete="given-name" {...f.campo("nombres")} />
+        <Campo etiqueta="Apellidos" autoComplete="family-name" {...f.campo("apellidos")} />
+        <Campo etiqueta="DNI (8 dígitos)" inputMode="numeric" maxLength={8} autoComplete="off" {...f.campo("dni", soloDigitos)} />
+        <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
+        <Campo etiqueta="Contraseña (mínimo 6 caracteres)" type={ver ? "text" : "password"} autoComplete="new-password" {...f.campo("contrasena")} />
+        <FuerzaClave clave={f.valores.contrasena} />
+        <Campo etiqueta="Repite la contraseña" type={ver ? "text" : "password"} autoComplete="new-password" {...f.campo("confirmar")} />
         <div className="marcar">
-          <input id="ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
-          <label htmlFor="ver">Mostrar contraseña</label>
+          <input id="re-ver" type="checkbox" checked={ver} onChange={(e) => setVer(e.target.checked)} />
+          <label htmlFor="re-ver">Mostrar contraseñas</label>
         </div>
         <div className="marcar">
-          <input id="acepta" type="checkbox" required checked={d.aceptaTerminos} onChange={(e) => setD({ ...d, aceptaTerminos: e.target.checked })} />
-          <label htmlFor="acepta">
+          <input id="re-aceptaTerminos" type="checkbox" checked={f.valores.aceptaTerminos} onChange={f.cambiar("aceptaTerminos")}
+            aria-invalid={f.errores.aceptaTerminos ? "true" : undefined} aria-describedby={f.errores.aceptaTerminos ? "re-aceptaTerminos-err" : undefined} />
+          <label htmlFor="re-aceptaTerminos">
             Acepto la <a href="#/privacidad" target="_blank" rel="noopener noreferrer">política de privacidad y los términos de uso</a> y
             autorizo el uso de mis datos para reservar turnos.
           </label>
         </div>
+        <ErrorCampo id="re-aceptaTerminos" error={f.errores.aceptaTerminos} />
         <button className="grande" type="submit" disabled={enviando}>{enviando ? "Creando…" : "Crear mi cuenta"}</button>
       </form>
       <p style={{ marginTop: "1rem" }}>¿Ya tienes cuenta? <a href="#/ingresar">Ingresar</a></p>
@@ -588,6 +682,124 @@ function Comprobante({ id }) {
           </>
         )}
       </Cargando>
+    </>
+  );
+}
+
+/* ====================================================================
+   Nosotros y contacto (Laboratorio 4: información del proyecto y redes sociales)
+   Formulario con los controles vistos en clase: text, select, radio, textarea y checkbox.
+   ==================================================================== */
+
+// Datos de contacto y redes del proyecto. CAMBIA estos enlaces por los de tus cuentas reales.
+const CONTACTO = { correo: "contacto@cuidatusalud.pe", celular: "", direccion: "Arequipa, Perú" };
+const REDES = [
+  { nombre: "Facebook", url: "https://www.facebook.com/", ico: "f" },
+  { nombre: "Instagram", url: "https://www.instagram.com/", ico: "i" },
+  { nombre: "WhatsApp", url: "https://wa.me/", ico: "w" },
+  { nombre: "YouTube", url: "https://www.youtube.com/", ico: "y" },
+];
+const INTEGRANTES = ["Antahuanaco Ticona, Brenda Adeli", "Ramos Gallegos, Maythee Alexandra", "Roque Sullca, Waldemar Emil"];
+const MOTIVOS = ["Duda sobre una campaña", "Ayuda para reservar un turno", "Error en la página", "Sugerencia", "Otro"];
+
+function RedesSociales() {
+  return (
+    <ul className="redes" aria-label="Redes sociales">
+      {REDES.map((r) => (
+        <li key={r.nombre}>
+          <a href={r.url} target="_blank" rel="noopener noreferrer" aria-label={r.nombre + " (se abre en otra pestaña)"}>
+            <span className="ico" aria-hidden="true">{r.ico}</span>{r.nombre}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Nosotros() {
+  const { avisar } = useContext(Ctx);
+  const f = useFormulario({ nombre: "", correo: "", celular: "", motivo: "", respuesta: "", mensaje: "", acepta: false }, {
+    nombre: (v) => Validar.nombre(v, "tu nombre"),
+    correo: (v) => Validar.email(v),
+    celular: (v) => Validar.telefono(v, true),
+    motivo: (v) => Validar.seleccion(v, "el motivo de tu mensaje"),
+    respuesta: (v) => Validar.grupo(v, "Elige cómo prefieres que te respondamos."),
+    mensaje: (v) => Validar.minimo(v, 10, "tu mensaje") || Validar.maximo(v, 500),
+    acepta: (v) => Validar.marcado(v, "Debes aceptar el uso de tus datos para poder responderte."),
+  }, "co-");
+  const [enviado, setEnviado] = useState(null);
+  const { valores: v, errores: er } = f;
+
+  function enviar(e) {
+    e.preventDefault();
+    if (!f.validarTodo()) return;
+    // Este prototipo no guarda mensajes en el servidor: se abre el programa de correo con el texto ya escrito.
+    const cuerpo = `${v.mensaje}\n\n— ${v.nombre}\nCorreo: ${v.correo}${v.celular ? "\nCelular: " + v.celular : ""}\nPrefiere respuesta por: ${v.respuesta}`;
+    window.location.href = `mailto:${CONTACTO.correo}?subject=${encodeURIComponent(v.motivo)}&body=${encodeURIComponent(cuerpo)}`;
+    setEnviado(v.nombre.trim());
+    avisar("Mensaje preparado. Se abrió tu programa de correo para enviarlo.", "ok");
+    f.reiniciar();
+  }
+
+  return (
+    <>
+      <h1>Nosotros y contacto</h1>
+      <div className="tarjeta">
+        <h2>¿Qué es Cuida Tu Salud AQP?</h2>
+        <p>
+          Es una plataforma web para consultar en un solo lugar las campañas de vacunación de Arequipa y reservar turnos con
+          control de cupos, para reducir la desinformación, las colas y las aglomeraciones en los establecimientos de salud.
+          Es un proyecto del curso de Programación Web.
+        </p>
+        <h3>Equipo</h3>
+        <ul>{INTEGRANTES.map((i) => <li key={i}>{i}</li>)}</ul>
+        <h3>Datos de contacto</h3>
+        <p><b>Correo:</b> <a href={"mailto:" + CONTACTO.correo}>{CONTACTO.correo}</a>
+          {CONTACTO.celular && <><br /><b>Celular:</b> {CONTACTO.celular}</>}
+          <br /><b>Ubicación:</b> {CONTACTO.direccion}</p>
+        <h3>Síguenos</h3>
+        <RedesSociales />
+      </div>
+
+      <div className="tarjeta" style={{ maxWidth: 640 }}>
+        <h2>Escríbenos</h2>
+        {enviado && <p className="mensaje ok" role="status">Gracias, {enviado}. Revisa tu programa de correo para enviar el mensaje.</p>}
+        <form onSubmit={enviar} noValidate>
+          <Campo etiqueta="Tu nombre" autoComplete="name" {...f.campo("nombre")} />
+          <Campo etiqueta="Correo electrónico" type="email" autoComplete="email" {...f.campo("correo")} />
+          <Campo etiqueta="Celular (opcional)" type="tel" inputMode="tel" autoComplete="tel" ayuda="9 dígitos, empieza con 9. Ej. 987654321"
+            {...f.campo("celular")} />
+
+          <label htmlFor="co-motivo">Motivo</label>
+          <select id="co-motivo" value={v.motivo} onChange={f.cambiar("motivo")} onBlur={f.campo("motivo").onBlur} className={er.motivo ? "con-error" : undefined}
+            aria-invalid={er.motivo ? "true" : undefined} aria-describedby={er.motivo ? "co-motivo-err" : undefined}>
+            <option value="">- Selecciona un motivo -</option>
+            {MOTIVOS.map((m) => <option key={m}>{m}</option>)}
+          </select>
+          <ErrorCampo id="co-motivo" error={er.motivo} />
+
+          <fieldset className="turnos" aria-describedby={er.respuesta ? "co-respuesta-err" : undefined}>
+            <legend>¿Cómo prefieres que te respondamos?</legend>
+            {["Correo", "WhatsApp", "Llamada"].map((o) => (
+              <div className="marcar" key={o}>
+                <input id={"co-resp-" + o} type="radio" name="respuesta" value={o} checked={v.respuesta === o} onChange={f.cambiar("respuesta")} />
+                <label htmlFor={"co-resp-" + o}>{o}</label>
+              </div>
+            ))}
+          </fieldset>
+          <ErrorCampo id="co-respuesta" error={er.respuesta} />
+
+          <Campo area rows={5} maxLength={600} etiqueta="Mensaje" contador={v.mensaje.length + " de 500"} {...f.campo("mensaje")} />
+
+          <div className="marcar">
+            <input id="co-acepta" type="checkbox" checked={v.acepta} onChange={f.cambiar("acepta")}
+              aria-invalid={er.acepta ? "true" : undefined} aria-describedby={er.acepta ? "co-acepta-err" : undefined} />
+            <label htmlFor="co-acepta">Acepto que usen mis datos solo para responderme (<a href="#/privacidad" target="_blank" rel="noopener noreferrer">ver privacidad</a>).</label>
+          </div>
+          <ErrorCampo id="co-acepta" error={er.acepta} />
+          <button className="grande" type="submit">Preparar mensaje</button>
+        </form>
+      </div>
     </>
   );
 }
@@ -1148,6 +1360,41 @@ function Logo() {
   );
 }
 
+/**
+ * Mensaje de bienvenida (Laboratorio 3). Se muestra al cargar la página (equivale al evento onload),
+ * una sola vez por visita, con saludo según la hora de Lima. Se cierra con el botón o con la tecla Escape.
+ */
+function Bienvenida({ sesion }) {
+  const [visible, setVisible] = useState(() => {
+    try { return !sessionStorage.getItem("bienvenida"); } catch { return true; }
+  });
+  const cerrar = useCallback(() => {
+    setVisible(false);
+    try { sessionStorage.setItem("bienvenida", "1"); } catch { /* sin almacenamiento */ }
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const alTeclear = (e) => { if (e.key === "Escape") cerrar(); }; // evento de teclado
+    document.addEventListener("keydown", alTeclear);
+    return () => document.removeEventListener("keydown", alTeclear);
+  }, [visible]);
+
+  if (!visible) return null;
+  const h = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Lima" })) % 24;
+  const saludo = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+  return (
+    <section className="bienvenida" role="status" aria-label="Mensaje de bienvenida">
+      <p>
+        <b>{saludo}{sesion ? ", " + sesion.nombres : ""}. Bienvenido(a) a Cuida Tu Salud AQP.</b><br />
+        Aquí puedes ver las campañas de vacunación de Arequipa y reservar tu turno sin hacer cola.
+        Si necesitas ayuda, pide a un familiar que te acompañe a reservar.
+      </p>
+      <button className="secundario" onClick={cerrar}>Entendido</button>
+    </section>
+  );
+}
+
 function leerPref() {
   try { return { escala: 1, contraste: false, ...JSON.parse(localStorage.getItem("pref")) }; }
   catch { return { escala: 1, contraste: false }; }
@@ -1222,6 +1469,7 @@ function App() {
     case "comprobante": pantalla = <Protegida><Comprobante id={ruta[1]} /></Protegida>; break;
     case "admin": pantalla = <Admin ruta={ruta} />; break;
     case "privacidad": pantalla = <Privacidad />; break;
+    case "nosotros": pantalla = <Nosotros />; break;
     case "inicio": pantalla = <Inicio />; break;
     default:
       pantalla = <div className="tarjeta"><h1>Página no encontrada</h1><a className="boton" href="#/inicio">Ir al inicio</a></div>;
@@ -1250,6 +1498,7 @@ function App() {
           <ul>
             {enlace("inicio", "Inicio", seccion === "inicio")}
             {enlace("campanas", "Campañas", seccion === "campanas")}
+            {enlace("nosotros", "Nosotros y contacto", seccion === "nosotros")}
             {sesion && sesion.rol !== "ADMIN" && enlace("mis-reservas", "Mis reservas", seccion === "mis-reservas" || seccion === "comprobante")}
             {sesion?.rol === "ADMIN" && enlace("admin/campanas", "Administración", seccion === "admin")}
             {!sesion && <li className="derecha"><a href="#/ingresar" aria-current={seccion === "ingresar" ? "page" : undefined}>Ingresar</a></li>}
@@ -1271,14 +1520,15 @@ function App() {
               </div>
             )}
           </div>
+          <Bienvenida sesion={sesion} />
           {pantalla}
         </main>
 
         <footer id="pie">
           <div>
             Proyecto de Programación Web · Arequipa 2026 ·{" "}
-            <a href="#/privacidad">Privacidad y términos</a>
-            <br />
+            <a href="#/privacidad">Privacidad y términos</a> · <a href="#/nosotros">Nosotros y contacto</a>
+            <RedesSociales />
             Prototipo con datos de prueba. Esta página informa y organiza turnos; no da diagnósticos médicos.
           </div>
         </footer>
