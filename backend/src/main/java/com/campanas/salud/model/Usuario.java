@@ -2,6 +2,7 @@ package com.campanas.salud.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import com.campanas.salud.util.Texto;
 import java.time.LocalDateTime;
 
 /** Cuenta de ciudadano o administrador. La contraseña se guarda solo como hash. */
@@ -16,7 +17,7 @@ public class Usuario {
     @JsonIgnore private String contrasenaHash;   // nunca se envía en las respuestas
     @Column(length = 20) private String rol = "CIUDADANO";   // CIUDADANO o ADMIN
     @Column(length = 20) private String estado = "ACTIVO";   // ACTIVO o BAJA
-    private LocalDateTime fechaRegistro = LocalDateTime.now();
+    private LocalDateTime fechaRegistro = LocalDateTime.now(Texto.LIMA);
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -38,3 +39,4 @@ public class Usuario {
     public LocalDateTime getFechaRegistro() { return fechaRegistro; }
     public void setFechaRegistro(LocalDateTime f) { this.fechaRegistro = f; }
 }
+
