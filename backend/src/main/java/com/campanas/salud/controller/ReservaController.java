@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 /** Reservas con control de cupos y control de asistencia (RF-12, RF-13, RF-14, RF-15). */
@@ -55,6 +56,8 @@ public class ReservaController {
             throw error(HttpStatus.CONFLICT, "Esta campaña ya está cerrada");
         if (t.getFecha().isBefore(Texto.hoy()))
             throw error(HttpStatus.CONFLICT, "Ese turno ya pasó. Elige otro horario.");
+        if (t.getFecha().isEqual(Texto.hoy()) && !LocalTime.now(Texto.LIMA).isBefore(t.getHoraFin()))
+            throw error(HttpStatus.CONFLICT, "Ese turno ya terminó hoy. Elige otro horario.");
         if (reservas.existsByTurnoCampanaIdAndBeneficiarioDniAndEstado(t.getCampana().getId(), r.beneficiarioDni(), "RESERVADA"))
             throw error(HttpStatus.CONFLICT, "Ya hay una reserva activa para ese DNI en esta campaña.");
 
@@ -107,7 +110,7 @@ public class ReservaController {
         if (!"RESERVADA".equals(r.getEstado()))
             throw error(HttpStatus.BAD_REQUEST, "Solo se puede atender una reserva activa");
         r.setEstado("ATENDIDA");
-        r.setFechaAtencion(LocalDateTime.now());
+        r.setFechaAtencion(LocalDateTime.now(Texto.LIMA));
         Reserva guardada = reservas.save(r);
         bitacora.registrar(AutenticacionInterceptor.actual(req), "Registró asistencia", "Reserva AQP-" + String.format("%06d", id));
         return guardada;
