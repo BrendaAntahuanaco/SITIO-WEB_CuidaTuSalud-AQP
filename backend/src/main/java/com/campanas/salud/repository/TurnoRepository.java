@@ -1,15 +1,23 @@
 package com.campanas.salud.repository;
 
 import com.campanas.salud.model.Turno;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface TurnoRepository extends JpaRepository<Turno, Long> {
     List<Turno> findByCampanaIdOrderByFechaAscHoraInicioAsc(Long campanaId);
+
+    /** Lee el turno bloqueando su fila hasta terminar la transacción (para editar el aforo sin perder cupos). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Turno t where t.id = :id")
+    Optional<Turno> buscarConBloqueo(@Param("id") Long id);
 
     /** Cupos libres por campaña desde una fecha: filas [idCampana, suma]. */
     @Query("select t.campana.id, coalesce(sum(t.cuposDisponibles), 0) from Turno t "
