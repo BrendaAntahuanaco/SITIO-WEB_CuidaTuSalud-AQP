@@ -9,6 +9,7 @@ import com.campanas.salud.seguridad.AutenticacionInterceptor;
 import com.campanas.salud.util.BitacoraService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
@@ -65,9 +66,10 @@ public class TurnoController {
     }
 
     /** Cambia fecha, horario o aforo. Los cupos ya reservados se respetan. */
+    @Transactional
     @PutMapping("/{id}")
     public Turno editar(@PathVariable Long id, @RequestBody TurnoRequest r, HttpServletRequest req) {
-        Turno t = turnos.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Turno no encontrado"));
+        Turno t = turnos.buscarConBloqueo(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "Turno no encontrado"));
         validar(r);
         int ocupados = t.getCuposTotal() - t.getCuposDisponibles();
         if (r.cuposTotal() < ocupados)
