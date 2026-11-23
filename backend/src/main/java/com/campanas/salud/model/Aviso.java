@@ -1,6 +1,8 @@
 package com.campanas.salud.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import com.campanas.salud.util.Texto;
 import java.time.LocalDateTime;
 
 /** Noticia o aviso de la página principal (RF-02). Siempre indica su fuente. */
@@ -8,11 +10,11 @@ import java.time.LocalDateTime;
 public class Aviso {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long usuarioAdminId;
+    @JsonIgnore private Long usuarioAdminId;   // dato interno: no se envía al navegador
     @Column(length = 150) private String titulo;
     @Column(length = 1000) private String contenido;
     @Column(length = 200) private String fuente;
-    private LocalDateTime fechaPublicacion = LocalDateTime.now();
+    private LocalDateTime fechaPublicacion = LocalDateTime.now(Texto.LIMA);
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
