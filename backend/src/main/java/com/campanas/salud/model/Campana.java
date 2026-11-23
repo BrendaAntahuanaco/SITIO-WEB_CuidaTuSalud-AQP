@@ -2,6 +2,7 @@ package com.campanas.salud.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import com.campanas.salud.util.Texto;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -25,7 +26,7 @@ public class Campana {
     /** Se actualiza sola cada vez que la campaña se crea o se edita. */
     @PrePersist
     @PreUpdate
-    void actualizarFecha() { this.fechaActualizacion = LocalDateTime.now(); }
+    void actualizarFecha() { this.fechaActualizacion = LocalDateTime.now(Texto.LIMA); }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
