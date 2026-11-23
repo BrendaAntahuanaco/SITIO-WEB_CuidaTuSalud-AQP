@@ -1,6 +1,8 @@
 package com.campanas.salud.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import com.campanas.salud.util.Texto;
 import java.time.LocalDateTime;
 
 /** Turno reservado por un ciudadano para sí mismo o para un menor a su cargo. */
@@ -8,12 +10,12 @@ import java.time.LocalDateTime;
 public class Reserva {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long usuarioId;
+    @JsonIgnore private Long usuarioId;        // dato interno: no se envía al navegador
     @ManyToOne private Turno turno;
     @Column(length = 150) private String beneficiarioNombre;
     @Column(length = 8) private String beneficiarioDni;
     @Column(length = 20) private String estado = "RESERVADA"; // RESERVADA, CANCELADA o ATENDIDA
-    private LocalDateTime fechaReserva = LocalDateTime.now();
+    private LocalDateTime fechaReserva = LocalDateTime.now(Texto.LIMA);
     private LocalDateTime fechaAtencion;
 
     public Long getId() { return id; }
