@@ -1,6 +1,8 @@
 package com.campanas.salud.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import com.campanas.salud.util.Texto;
 import java.time.LocalDateTime;
 
 /** Bitácora de las acciones hechas en el panel de administración. */
@@ -8,11 +10,11 @@ import java.time.LocalDateTime;
 public class RegistroAccion {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long usuarioId;
+    @JsonIgnore private Long usuarioId;        // dato interno: no se envía al navegador
     @Column(length = 200) private String usuarioNombre;
     @Column(length = 200) private String accion;
     @Column(length = 200) private String entidadAfectada;
-    private LocalDateTime fechaHora = LocalDateTime.now();
+    private LocalDateTime fechaHora = LocalDateTime.now(Texto.LIMA);
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
