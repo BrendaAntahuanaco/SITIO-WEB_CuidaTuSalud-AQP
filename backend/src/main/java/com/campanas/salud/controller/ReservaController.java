@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 /** Reservas con control de cupos y control de asistencia (RF-12, RF-13, RF-14, RF-15). */
@@ -24,6 +23,9 @@ public class ReservaController {
 
     /** El usuario NO viaja aquí: sale del token, para que nadie reserve a nombre de otra cuenta. */
     public record ReservaRequest(Long turnoId, String beneficiarioNombre, String beneficiarioDni) { }
+
+    /** Máximo de reservas activas por cuenta (titular + familiares), para que nadie agote los cupos. */
+    private static final int MAX_RESERVAS_ACTIVAS = 5;
 
     private final TurnoRepository turnos;
     private final ReservaRepository reservas;
@@ -46,6 +48,8 @@ public class ReservaController {
     public Reserva reservar(@RequestBody ReservaRequest r, HttpServletRequest req) {
         Usuario usuario = AutenticacionInterceptor.actual(req);
         if (r.turnoId() == null) throw error(HttpStatus.BAD_REQUEST, "Elige un horario");
+        if (reservas.countByUsuarioIdAndEstado(usuario.getId(), "RESERVADA") >= MAX_RESERVAS_ACTIVAS)
+            throw error(HttpStatus.CONFLICT, "Ya tienes " + MAX_RESERVAS_ACTIVAS + " reservas activas. Cancela una o espera a ser atendido para reservar otra.");
         Turno t = turnos.findById(r.turnoId()).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "El turno no existe"));
 
         if (Texto.vacio(r.beneficiarioNombre()) || r.beneficiarioNombre().trim().length() > 150)
@@ -56,8 +60,6 @@ public class ReservaController {
             throw error(HttpStatus.CONFLICT, "Esta campaña ya está cerrada");
         if (t.getFecha().isBefore(Texto.hoy()))
             throw error(HttpStatus.CONFLICT, "Ese turno ya pasó. Elige otro horario.");
-        if (t.getFecha().isEqual(Texto.hoy()) && !LocalTime.now(Texto.LIMA).isBefore(t.getHoraFin()))
-            throw error(HttpStatus.CONFLICT, "Ese turno ya terminó hoy. Elige otro horario.");
         if (reservas.existsByTurnoCampanaIdAndBeneficiarioDniAndEstado(t.getCampana().getId(), r.beneficiarioDni(), "RESERVADA"))
             throw error(HttpStatus.CONFLICT, "Ya hay una reserva activa para ese DNI en esta campaña.");
 
@@ -110,7 +112,7 @@ public class ReservaController {
         if (!"RESERVADA".equals(r.getEstado()))
             throw error(HttpStatus.BAD_REQUEST, "Solo se puede atender una reserva activa");
         r.setEstado("ATENDIDA");
-        r.setFechaAtencion(LocalDateTime.now(Texto.LIMA));
+        r.setFechaAtencion(LocalDateTime.now());
         Reserva guardada = reservas.save(r);
         bitacora.registrar(AutenticacionInterceptor.actual(req), "Registró asistencia", "Reserva AQP-" + String.format("%06d", id));
         return guardada;
