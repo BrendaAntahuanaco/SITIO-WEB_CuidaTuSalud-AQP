@@ -11,4 +11,6 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     boolean existsByTurnoCampanaId(Long campanaId);
     /** Evita reservas duplicadas: mismo DNI, misma campaña y reserva todavía activa. */
     boolean existsByTurnoCampanaIdAndBeneficiarioDniAndEstado(Long campanaId, String dni, String estado);
+    /** Cuántas reservas activas tiene una cuenta (para limitar el abuso de cupos). */
+    long countByUsuarioIdAndEstado(Long usuarioId, String estado);
 }
