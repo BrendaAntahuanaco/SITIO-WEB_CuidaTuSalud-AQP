@@ -4,6 +4,8 @@ import com.campanas.salud.model.Usuario;
 import com.campanas.salud.repository.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import java.io.IOException;
@@ -15,10 +17,12 @@ import java.util.Optional;
  *  - PUBLICO: consultar campañas, turnos, establecimientos y avisos; registrarse e ingresar.
  *  - SESION:  reservar, ver y cancelar las propias reservas.
  *  - ADMIN:   crear, editar y eliminar datos, usuarios, asistencia y reportes.
+ *            Es el nivel por defecto: una ruta nueva queda protegida hasta que se la declare pública o de sesión.
  * El usuario sale del token, nunca de datos que envíe el navegador.
  */
 @Component
 public class AutenticacionInterceptor implements HandlerInterceptor {
+    private static final Logger log = LoggerFactory.getLogger(AutenticacionInterceptor.class);
     private static final String ATRIBUTO = "usuarioActual";
 
     private enum Nivel { PUBLICO, SESION, ADMIN }
@@ -49,9 +53,15 @@ public class AutenticacionInterceptor implements HandlerInterceptor {
 
         Nivel nivel = nivel(request.getMethod(), request.getServletPath());
         if (nivel == Nivel.PUBLICO) return true;
-        if (usuario == null) return rechazar(response, 401, "Tu sesión venció o no has ingresado. Ingresa de nuevo.");
-        if (nivel == Nivel.ADMIN && !"ADMIN".equals(usuario.getRol()))
+        if (usuario == null) {
+            log.warn("401 sin sesión válida: {} {} desde {}", request.getMethod(), request.getServletPath(), request.getRemoteAddr());
+            return rechazar(response, 401, "Tu sesión venció o no has ingresado. Ingresa de nuevo.");
+        }
+        if (nivel == Nivel.ADMIN && !"ADMIN".equals(usuario.getRol())) {
+            log.warn("403 acceso de administrador denegado: {} {} usuario {} desde {}",
+                    request.getMethod(), request.getServletPath(), usuario.getId(), request.getRemoteAddr());
             return rechazar(response, 403, "Esta acción es solo para administradores.");
+        }
         return true;
     }
 
@@ -69,13 +79,11 @@ public class AutenticacionInterceptor implements HandlerInterceptor {
                 || ruta.equals("/api/turnos") || ruta.equals("/api/establecimientos")
                 || ruta.equals("/api/avisos")))
             return Nivel.PUBLICO;
-        if (ruta.startsWith("/api/usuarios") || ruta.startsWith("/api/reportes")
-                || ruta.equals("/api/reservas/buscar") || ruta.matches("/api/reservas/\\d+/atender"))
-            return Nivel.ADMIN;
-        if (ruta.startsWith("/api/campanas") || ruta.startsWith("/api/turnos")
-                || ruta.startsWith("/api/establecimientos") || ruta.startsWith("/api/avisos"))
-            return Nivel.ADMIN; // escritura sobre datos públicos
-        return Nivel.SESION;
+        // Solo estas rutas piden únicamente sesión: reservar, ver las propias y cancelar una reserva
+        if (ruta.equals("/api/reservas") || ruta.matches("/api/reservas/\\d+"))
+            return Nivel.SESION;
+        // Cualquier otra ruta (usuarios, reportes, escritura de datos, rutas nuevas...) es solo para administradores
+        return Nivel.ADMIN;
     }
 
     private boolean rechazar(HttpServletResponse response, int estado, String mensaje) throws IOException {
