@@ -170,6 +170,7 @@ SITIO-WEB_CuidaTuSalud-AQP/
 ├── README.md
 ├── backend/                         ← aplicación completa (Spring Boot + página React)
 │   ├── pom.xml                      ← dependencias y versión de Java
+│   ├── Dockerfile, .dockerignore    ← imagen Docker para el despliegue (Render)
 │   ├── mvnw, mvnw.cmd, .mvn/        ← Maven Wrapper (no hay que instalar Maven)
 │   └── src/
 │       ├── main/java/com/campanas/salud/
@@ -178,13 +179,16 @@ SITIO-WEB_CuidaTuSalud-AQP/
 │       │   ├── model/                       ← MODELO: entidades JPA (tablas)
 │       │   ├── repository/                  ← MODELO: acceso a datos (Spring Data JPA)
 │       │   ├── controller/                  ← CONTROLADOR: API REST y manejo de errores
-│       │   ├── seguridad/                   ← token, interceptor de roles y configuración web
+│       │   ├── seguridad/                   ← token, interceptor de roles, límite de intentos,
+│       │   │                                  cabeceras de seguridad y configuración web
 │       │   └── util/                        ← bitácora y funciones de texto
 │       ├── main/resources/
 │       │   ├── application.properties       ← configuración
 │       │   └── static/                      ← VISTA: index.html, app.jsx (React), estilos.css
-│       └── test/java/.../SaludApplicationTests.java
+│       └── test/java/.../                   ← SaludApplicationTests.java, LimiteIntentosTest.java
 ├── frontend/                        ← reservado (la vista se sirve desde backend/static)
+├── scripts/
+│   └── generar-sri.sh               ← genera las etiquetas <script> con integridad (SRI) de React y Babel
 └── docs/
     ├── arquitectura/                ← DOCUMENTACION_TECNICA.md (aquí también va el diagrama de arquitectura)
     ├── modelo-er/                   ← diagrama entidad-relación
